@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>2014/04/06 15:52:39.000.049,=C:\Users\Administrator\Documents\RAD Studio\Projects\Unit1.pas</Transaction>
+    <Transaction>2014/04/06 15:54:34.000.280,C:\Users\Administrator\Documents\RAD Studio\Projects\Unit1.pas=P:\合作项目\PicTest测试启动菜单\方法2\Unit1.pas</Transaction>
+    <Transaction>2014/04/06 15:54:34.000.280,C:\Users\Administrator\Documents\RAD Studio\Projects\Unit1.dfm=P:\合作项目\PicTest测试启动菜单\方法2\Unit1.dfm</Transaction>
+    <Transaction>2014/04/06 15:54:35.000.750,C:\Users\Administrator\Documents\RAD Studio\Projects\Project2.dproj=P:\合作项目\PicTest测试启动菜单\方法2\Project2.dproj</Transaction>
+    <Transaction>2014/04/06 15:56:20.000.538,=P:\合作项目\PicTest测试启动菜单\方法2\Unit2.pas</Transaction>
+  </Transactions>
+</BorlandProject>

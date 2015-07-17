@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>2014/04/06 16:31:57.000.619,=rtl.dcp</Transaction>
+    <Transaction>2014/04/06 16:32:13.000.406,P:\合作项目\PicSkinRelease\PngPicSkin\PngPicSkin.dproj=C:\Users\Administrator\Documents\RAD Studio\Projects\Package1.dproj</Transaction>
+    <Transaction>2014/04/06 16:32:18.000.200,=P:\合作项目\PicSkinRelease\PngPicSkin\DxPicSkinReg.pas</Transaction>
+    <Transaction>2014/04/06 16:32:30.000.424,=P:\合作项目\PicSkinRelease\PngPicSkin\DxPngFormUI.dcu</Transaction>
+    <Transaction>2014/04/06 16:32:30.000.877,=P:\合作项目\PicSkinRelease\PngPicSkin\GdipUtil.dcu</Transaction>
+    <Transaction>2014/04/06 16:32:30.000.476,=P:\合作项目\PicSkinRelease\PngPicSkin\DxPngImage.dcu</Transaction>
+    <Transaction>2014/04/06 16:32:30.000.824,=P:\合作项目\PicSkinRelease\PngPicSkin\GdipTypes.dcu</Transaction>
+    <Transaction>2014/04/06 16:32:30.000.945,=P:\合作项目\PicSkinRelease\PngPicSkin\pngimage2010.dcu</Transaction>
+    <Transaction>2014/04/06 16:32:30.000.532,=P:\合作项目\PicSkinRelease\PngPicSkin\DxPngUIWebBrowser.dcu</Transaction>
+    <Transaction>2014/04/06 16:32:30.000.584,=P:\合作项目\PicSkinRelease\PngPicSkin\DxSkinConsts.dcu</Transaction>
+    <Transaction>2014/04/06 16:32:30.000.757,=P:\合作项目\PicSkinRelease\PngPicSkin\Gdiplus.dcu</Transaction>
+    <Transaction>2014/04/06 16:32:30.000.369,=P:\合作项目\PicSkinRelease\PngPicSkin\DxPngEdit.dcu</Transaction>
+    <Transaction>2014/04/06 16:32:30.000.650,=P:\合作项目\PicSkinRelease\PngPicSkin\GdipExport.dcu</Transaction>
+    <Transaction>2014/04/06 16:34:29.000.454,=P:\合作项目\PicSkinRelease\PngPicSkin\DxCommonFuncs.dcu</Transaction>
+    <Transaction>2014/04/06 16:35:36.000.317,=vclimg.dcp</Transaction>
+    <Transaction>2014/04/06 16:35:36.000.306,=vclie.dcp</Transaction>
+    <Transaction>2014/04/06 16:38:00.000.787,P:\合作项目\PicSkinRelease\PngPicSkin\PngPicSkin.dproj=P:\合作项目\PicSkinRelease\PngPicSkin\DxPngPicSkin.dproj</Transaction>
+    <Transaction>2015/07/17 22:15:06.000.395,Y:\合作项目\PicSkinRelease\PngPicSkin\DxCommonFuncs.pas=</Transaction>
+    <Transaction>2015/07/17 22:43:02.000.011,Y:\合作项目\PicSkinRelease\DxPngPicSkin\PngPicSkin\DxPngImage.pas=</Transaction>
+  </Transactions>
+</BorlandProject>
