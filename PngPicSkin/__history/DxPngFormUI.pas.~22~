@@ -531,7 +531,7 @@ begin
         BlendFunction.BlendOp := AC_SRC_OVER; //把源图片覆盖到目标之上
         BlendFunction.BlendFlags := 0;
         BlendFunction.AlphaFormat := AC_SRC_ALPHA; //每个像素有各自的alpha通道
-        BlendFunction.SourceConstantAlpha := FAlphaByte; //源图片的透明度
+        BlendFunction.SourceConstantAlpha := 255; //源图片的透明度
 
         SetWindowLong(FForm.Handle, GWL_EXSTYLE, GetWindowLong(FForm.Handle,
         GWL_EXSTYLE) or WS_EX_LAYERED);
