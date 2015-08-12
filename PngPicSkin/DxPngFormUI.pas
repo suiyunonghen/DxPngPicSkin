@@ -43,9 +43,11 @@ type
     FUseGDIExStyle: Boolean;
     FActiveControl: TDxPngUIControl;
     LockMsgToTargControl: Boolean;
+    FAlphaByte: Byte;
     procedure SetBackPng(Value: TDxPngImage);
     procedure SetBackTopCenter(const Value: Boolean);
     procedure SetUserGDIExStyle(const Value: Boolean);
+    procedure SetAlphaByte(const Value: Byte);
   protected
     procedure DoPicChange(Sender: TObject);
     procedure WndProc(var msg: TMessage);virtual;
@@ -66,6 +68,7 @@ type
     property UsePicSize: Boolean read FUsePicSize write FUsePicSize default True;
     property BackTopCenter: Boolean read FBackTopCenter write SetBackTopCenter default False;
     property UseGDIExStyle: Boolean read FUseGDIExStyle write SetUserGDIExStyle;
+    property AlphaByte: Byte read FAlphaByte write SetAlphaByte default 240;
   end;
 
   TDxPngUIControl = class(TControl)
@@ -243,6 +246,7 @@ end;
 constructor TDxFormPngUIEngine.create(AOwner: TComponent);
 begin
   inherited;
+  FAlphaByte := 240;
   Assert(AOwner.InheritsFrom(TForm));
   LockMsgToTargControl := False;
   FBackTopCenter := False;
@@ -327,6 +331,16 @@ begin
   SetWindowLong(FForm.Handle,GWL_STYLE,GetWindowLong(FForm.Handle,GWL_STYLE) and (not WS_CAPTION) and (not WS_THICKFRAME));
 end;
 
+procedure TDxFormPngUIEngine.SetAlphaByte(const Value: Byte);
+begin
+  if FAlphaByte <> Value then
+  begin
+    FAlphaByte := Value;
+    if not (csDesigning in ComponentState) then
+      UpdateLayered;
+  end;
+end;
+
 procedure TDxFormPngUIEngine.SetBackPng(Value: TDxPngImage);
 begin
   FBackPng.Assign(Value);
@@ -363,7 +377,7 @@ var
   BlendFunction: TBlendFunction;
   bmp : TBitmap;
 
-  i: Integer;
+  i,x,y: Integer;
   C: TDxPngUIControl;
   r: TRect;
 
@@ -375,6 +389,7 @@ var
   StreamApter: TStreamAdapter;
   tmpcanvas: TCanvas;
   TRNS: TChunkTRNS;
+  pb: pByteArray;
 begin
   if (FUpCount > 0) or (csDesigning in ComponentState) then Exit;
   if not FUseGDIExStyle then
@@ -430,7 +445,15 @@ begin
     for i := 0 to LinkPngControls.Count - 1 do
     begin
       C := LinkPngControls.Items[i];
-      C.PaintUI(bmp.Canvas,C.BoundsRect);
+      r := c.BoundsRect;
+      C.PaintUI(bmp.Canvas,r);
+      //重置控件的透明通道
+      for y := r.Top to r.Bottom - 1 do
+      begin
+        pb := bmp.ScanLine[y];
+        for x := r.Left to r.Right - 1 do
+          Pb^[(x+1)*4-1] := $FF
+      end;
     end;
     ptDst := Point(FForm.Left, FForm.Top);
     ptSrc := Point(0, 0);
@@ -447,7 +470,7 @@ begin
 
     BlendFunction.BlendOp := AC_SRC_OVER;
     BlendFunction.BlendFlags := 0;
-    BlendFunction.SourceConstantAlpha := $FF; // 透明度
+    BlendFunction.SourceConstantAlpha := FAlphaByte; // 透明度
     BlendFunction.AlphaFormat := AC_SRC_ALPHA;
 
     SetWindowLong(FForm.Handle, GWL_EXSTYLE, GetWindowLong(FForm.Handle,
