@@ -24,7 +24,7 @@ interface
 {$DEFINE UseDelphi}              //Disable fat vcl units(perfect for small apps)
 {$DEFINE ErrorOnUnknownCritical} //Error when finds an unknown critical chunk
 {$DEFINE CheckCRC}               //Enables CRC checking
-//{$DEFINE RegisterGraphic}        //Registers TPNGObject to use with TPicture
+{$DEFINE RegisterGraphic}        //Registers TPNGObject to use with TPicture
 {$DEFINE PartialTransparentDraw} //Draws partial transparent images
 {$DEFINE Store16bits}            //Stores the extra 8 bits from 16bits/sample
 {$RANGECHECKS OFF} {$J+}
@@ -6044,10 +6044,12 @@ initialization
   {Registers TPngImage to use with TPicture}
   {$IFDEF UseDelphi}{$IFDEF RegisterGraphic}
     TPicture.RegisterFileFormat('PNG', 'Portable Network Graphics', TPngImage);
+    TPicture.RegisterFileFormat('PNG', 'Portable Network Graphics', TDxPngImage);
   {$ENDIF}{$ENDIF}
 finalization
   {$IFDEF UseDelphi}{$IFDEF RegisterGraphic}
     TPicture.UnregisterGraphicClass(TPngImage);
+    TPicture.UnregisterGraphicClass(TDxPngImage);
   {$ENDIF}{$ENDIF}
   {Free chunk classes}
   FreeChunkClassList;
