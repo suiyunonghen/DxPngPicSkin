@@ -25,11 +25,17 @@ unit DxPngFormUI;
 }
 
 interface
+
+{$if CompilerVersion < 22}
+  {$MESSAGE FATAL '本控件只支持XE及其XE之后的版本.'}
+{$ifend}
 uses Windows,Classes,Messages,SysUtils, Forms,Controls,Graphics,ExtCtrls,
-DxSkinConsts,Gdiplus,pngimage2010;
+DxSkinConsts,Gdiplus,pngimage2010,Generics.Collections;
 
 type
   TDxPngUIControl = class;
+  TDxUISkins = class;
+  TDxUISkin = class;
   TDxFormPngUIEngine = class(TComponent)
   private
     FForm: TForm;
@@ -44,10 +50,12 @@ type
     FActiveControl: TDxPngUIControl;
     LockMsgToTargControl: Boolean;
     FAlphaByte: Byte;
+    FUISkins: TDxUISkins;
     procedure SetBackPng(Value: TDxPngImage);
     procedure SetBackTopCenter(const Value: Boolean);
     procedure SetUserGDIExStyle(const Value: Boolean);
     procedure SetAlphaByte(const Value: Byte);
+    procedure SetUISkins(const Value: TDxUISkins);
   protected
     procedure DoPicChange(Sender: TObject);
     procedure WndProc(var msg: TMessage);virtual;
@@ -55,6 +63,7 @@ type
     procedure DoMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure Loaded;override;
+    procedure Notification(AComponent: TComponent; Operation: TOperation);override;
   public
     procedure UpdateLayered;
     constructor Create(AOwner: TComponent);override;
@@ -62,6 +71,7 @@ type
     function FindControlAtPoint(p: TPoint): TDxPngUIControl;
     procedure BeginUpdate;
     procedure EndUpdate;
+    function  ControlSkin(Control: TDxPngUIControl): TDxUISkin;
   published
     property CanMoveForm: Boolean read FCanMoveForm write FCanMoveForm;
     property BackPng: TDxPngImage read FBackPng write SetBackPng;
@@ -69,6 +79,8 @@ type
     property BackTopCenter: Boolean read FBackTopCenter write SetBackTopCenter default False;
     property UseGDIExStyle: Boolean read FUseGDIExStyle write SetUserGDIExStyle;
     property AlphaByte: Byte read FAlphaByte write SetAlphaByte default 240;
+
+    property UISkins: TDxUISkins read FUISkins write SetUISkins;
   end;
 
   TDxPngUIControl = class(TControl)
@@ -123,6 +135,52 @@ type
     procedure BringToFront;
   published
     property PngUIEngine: TDxFormPngUIEngine read FPngUIEngine write SetPngUIEngine;
+  end;
+
+  TDxUISkins = class(TComponent)
+  private
+    FUISkins: TDictionary<string,TDxUISkin>;
+    FEngines: TList;
+    FUpcount:Integer;
+  protected
+    procedure Change;dynamic;
+    procedure Notification(AComponent: TComponent; Operation: TOperation);override;
+  public
+    constructor Create(AOwner: TComponent); override;
+    destructor Destroy;override;
+    function GetSkin(C: TDxPngUIControl): TDxUISkin;
+    procedure BeginUpdate;
+    procedure EndUpdate;
+  end;
+
+  //UI控件皮肤
+  TDxUISkin = class(TComponent)
+  protected
+    FUIControlClass: string;
+    FUISkins: TDxUISkins;
+    procedure SetUISkins(const Value: TDxUISkins);
+    procedure DoPicChange(Sender: TObject);
+  public
+    constructor Create(AOwner: TComponent); override;
+  published
+    property UISkins: TDxUISkins read FUISkins write SetUISkins;
+  end;
+
+  TDxButtonSkin = class(TDxUISkin)
+  private
+    FMouseDownPng: TDxPngImage;
+    FMouseMovePng: TDxPngImage;
+    FNormalPng: TDxPngImage;
+    procedure SetMouseDownPng(const Value: TDxPngImage);
+    procedure SetMouseMovePng(const Value: TDxPngImage);
+    procedure SetNormalPng(const Value: TDxPngImage);
+  public
+    constructor Create(AOwner: TComponent); override;
+    destructor Destroy;override;
+  published
+    property NormalPng: TDxPngImage read FNormalPng write SetNormalPng;
+    property MouseDownPng: TDxPngImage read FMouseDownPng write SetMouseDownPng;
+    property MouseMovePng: TDxPngImage read FMouseMovePng write SetMouseMovePng;
   end;
 
   TDxPngUIButton = class(TDxPngUIControl)
@@ -227,6 +285,7 @@ type
     property Font;
   end;
 
+
 implementation
 
 type
@@ -241,6 +300,13 @@ end;
 procedure TDxFormPngUIEngine.BeginUpdate;
 begin
   Inc(FUpCount);
+end;
+
+function TDxFormPngUIEngine.ControlSkin(Control: TDxPngUIControl): TDxUISkin;
+begin
+  if FUISkins <> nil then
+    Result := FUISkins.GetSkin(Control)
+  else Result := nil;
 end;
 
 constructor TDxFormPngUIEngine.create(AOwner: TComponent);
@@ -331,6 +397,20 @@ begin
   SetWindowLong(FForm.Handle,GWL_STYLE,GetWindowLong(FForm.Handle,GWL_STYLE) and (not WS_CAPTION) and (not WS_THICKFRAME));
 end;
 
+procedure TDxFormPngUIEngine.Notification(AComponent: TComponent;
+  Operation: TOperation);
+begin
+  inherited;
+  if Operation = opRemove  then
+  begin
+    if AComponent.InheritsFrom(TDxUISkins) then
+    begin
+      FUISkins := nil;
+      TDxUISkins(AComponent).FEngines.Remove(self);
+    end;
+  end;
+end;
+
 procedure TDxFormPngUIEngine.SetAlphaByte(const Value: Byte);
 begin
   if FAlphaByte <> Value then
@@ -354,6 +434,26 @@ begin
     if csDesigning in ComponentState then
       FForm.Perform(WM_PAINT,0,0)
     else UpdateLayered;
+  end;
+end;
+
+procedure TDxFormPngUIEngine.SetUISkins(const Value: TDxUISkins);
+begin
+  if FUISkins <> Value then
+  begin
+    if FUISkins <> nil then
+    begin
+      FUISkins.RemoveFreeNotification(self);
+      FUISkins.FEngines.Remove(self);
+      RemoveFreeNotification(FUISkins);
+    end;
+    FUISkins := Value;
+    if FUISkins <>  nil then
+    begin
+      FUISkins.FreeNotification(self);
+      FreeNotification(FUISkins);
+      FUISkins.FEngines.Add(Self);
+    end;
   end;
 end;
 
@@ -391,7 +491,7 @@ var
   TRNS: TChunkTRNS;
   pb: pByteArray;
 begin
-  if (FUpCount > 0) or (csDesigning in ComponentState) then Exit;
+  if (FUpCount > 0) or (csDesigning in ComponentState) or (csDestroying in ComponentState) then Exit;
   if not FUseGDIExStyle then
   begin
     bmp := TBitmap.Create;
@@ -1244,27 +1344,58 @@ end;
 procedure TDxPngUIButton.PaintUI(ToCanvas: TCanvas;DestRect: TRect);
 var
   r: TRect;
+  Skin: TDxUISkin;
+  Png: TDxPngImage;
 begin
+  Png := nil;
   if csDesigning in ComponentState then
   begin
     if not FNormalPng.Empty then
-      ToCanvas.Draw(DestRect.Left,DestRect.Top,FNormalPng)
-    else
+      Png := FNormalPng
+    else if (FPngUIEngine <> nil) and (FPngUIEngine.FUISkins <> nil) and (FPngUIEngine.FUISkins.FUISkins.TryGetValue('TDxPngUIButton',SKin)) then
     begin
-      ToCanvas.Brush.Color := clBlue;
-      ToCanvas.FrameRect(DestRect);
+      if not TDxButtonSkin(Skin).FNormalPng.Empty then
+        Png := TDxButtonSkin(Skin).FNormalPng;
     end;
   end
   else if IsMouseIn then
   begin
     if IsLDown then
-      ToCanvas.Draw(DestRect.Left,DestRect.Top,FMouseDownPng)
-    else ToCanvas.Draw(DestRect.Left,DestRect.Top,FMouseMovePng);
+    begin
+      if not FMouseDownPng.Empty then
+        Png := FMouseDownPng
+      else if (FPngUIEngine <> nil) and (FPngUIEngine.FUISkins <> nil) then
+      begin
+        Skin := FPngUIEngine.FUISkins.GetSkin(self);
+        if (Skin <> nil) and not TDxButtonSkin(Skin).FMouseDownPng.Empty then
+          png := TDxButtonSkin(Skin).FMouseDownPng;
+      end;
+    end
+    else if not FMouseMovePng.Empty then
+       Png := FMouseMovePng
+    else if (FPngUIEngine <> nil) and (FPngUIEngine.FUISkins <>  nil) then
+    begin
+      Skin := FPngUIEngine.FUISkins.GetSkin(self);
+      if (Skin <> nil) and not TDxButtonSkin(Skin).FMouseMovePng.Empty then
+        png := TDxButtonSkin(Skin).FMouseMovePng;
+    end;
   end
-  else if FNormalPng <> nil then
+  else if not FNormalPng.Empty then
+    Png := FNormalPng
+  else if  (FPngUIEngine <> nil) and (FPngUIEngine.FUISkins <> nil) then
   begin
-     ToCanvas.Draw(DestRect.Left,DestRect.Top,FNormalPng);
+    Skin := FPngUIEngine.FUISkins.GetSkin(self);
+    if (Skin <> nil) and not TDxButtonSkin(Skin).FNormalPng.Empty then
+      png := TDxButtonSkin(Skin).FNormalPng;
   end;
+  if Png <> nil then
+    ToCanvas.Draw(DestRect.Left,DestRect.Top,Png)
+  else
+  begin
+    ToCanvas.Brush.Color := clBlue;
+    ToCanvas.FrameRect(DestRect);
+  end;
+
   //绘制图标
   if not FIcon.Empty then
   begin
@@ -1693,5 +1824,156 @@ begin
     FLinkForm.FreeNotification(Self);
   end;
 end;
+
+{ TDxUISkin }
+
+constructor TDxUISkin.Create(AOwner: TComponent);
+begin
+  inherited;
+
+end;
+
+
+procedure TDxUISkin.DoPicChange(Sender: TObject);
+begin
+  if FUISkins <> nil then
+    FUISkins.Change;
+end;
+
+procedure TDxUISkin.SetUISkins(const Value: TDxUISkins);
+var
+  Skin: TDxUISkin;
+begin
+  if FUISkins <> Value then
+  begin
+    if FUISkins <> nil  then
+    begin
+      if FUISkins.FUISkins.ContainsKey(FUIControlClass) then
+        FUISkins.FUISkins.Remove(FUIControlClass);
+      RemoveFreeNotification(FUISkins);
+    end;
+    FUISkins := Value;
+    if FUISkins <> nil then
+    begin
+      if FUISkins.FUISkins.TryGetValue(FUIControlClass,Skin) then
+      begin
+         Skin.RemoveFreeNotification(FUISkins);
+         Skin.FUISkins := nil;
+      end;
+      FUISkins.FUISkins.AddOrSetValue(FUIControlClass,Self);
+      FreeNotification(FUISkins);
+    end;
+  end;
+end;
+
+{ TDxUISkins }
+
+procedure TDxUISkins.BeginUpdate;
+begin
+  inc(FUpCount);
+end;
+
+procedure TDxUISkins.Change;
+var
+  Engine: TDxFormPngUIEngine;
+  i: Integer;
+begin
+  if not (csDesigning in ComponentState) then
+  for i := 0 to FEngines.Count - 1 do
+  begin
+    Engine := FEngines[i];
+    Engine.UpdateLayered;
+  end;    
+end;
+
+constructor TDxUISkins.Create(AOwner: TComponent);
+begin
+  inherited;
+  FUISkins := TDictionary<string,TDxUISkin>.Create;
+  FEngines := TList.Create;
+end;
+
+destructor TDxUISkins.Destroy;
+var
+  Pair: TPair<String,TDxUISkin>;
+begin
+  while FEngines.Count > 0 do  
+    TDxFormPngUIEngine(FEngines[FEngines.Count - 1]).UISkins := nil;
+  for Pair in FUISkins do
+    Pair.Value.UISkins := nil;
+  FEngines.Free;
+  FUISkins.Free;
+  inherited;
+end;
+
+procedure TDxUISkins.EndUpdate;
+begin
+  Dec(FupCount);
+  if FUpcount <= 0 then
+  begin
+    FUpcount := 0;
+    Change;
+  end;
+end;
+
+function TDxUISkins.GetSkin(C: TDxPngUIControl): TDxUISkin;
+begin
+  FUISkins.TryGetValue(C.ClassName,Result)
+end;
+
+procedure TDxUISkins.Notification(AComponent: TComponent;
+  Operation: TOperation);
+begin
+  inherited;
+  if Operation = opRemove then
+  begin
+    if AComponent.InheritsFrom(TDxFormPngUIEngine) then
+      FEngines.Remove(AComponent)
+    else if AComponent.InheritsFrom(TDxUISkin) then
+    begin
+      FUISkins.Remove(TDxUISkin(AComponent).FUIControlClass);
+      Change;
+    end;
+  end;
+end;
+
+{ TDxButtonSkin }
+
+constructor TDxButtonSkin.Create(AOwner: TComponent);
+begin
+  inherited;
+  FUIControlClass := 'TDxPngUIButton';
+  FMouseDownPng := TDxPngImage.Create;
+  FMouseMovePng := TDxPngImage.Create;
+  FNormalPng := TDxPngImage.Create;
+
+  FNormalPng.OnChange := DoPicChange;
+  FMouseMovePng.OnChange := DoPicChange;
+  FMouseDownPng.OnChange := DoPicChange;
+end;
+
+destructor TDxButtonSkin.Destroy;
+begin
+  FMouseDownPng.Free;
+  FMouseMovePng.Free;
+  FNormalPng.Free;
+  inherited;
+end;
+
+procedure TDxButtonSkin.SetMouseDownPng(const Value: TDxPngImage);
+begin
+  FMouseDownPng.Assign(Value);
+end;
+
+procedure TDxButtonSkin.SetMouseMovePng(const Value: TDxPngImage);
+begin
+  FMouseMovePng.Assign(Value);
+end;
+
+procedure TDxButtonSkin.SetNormalPng(const Value: TDxPngImage);
+begin
+  FNormalPng.Assign(Value);
+end;
+
 
 end.

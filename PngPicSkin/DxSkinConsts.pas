@@ -436,9 +436,6 @@ begin
   end;
 end;
 
-var
-  ModuleName,tmpMM: string;
-
 initialization
   FormSkinPic := TDxPngImage.Create;
   FormSkinPic.LoadFromResourceName(Hinstance,'FormSkin');
@@ -456,10 +453,6 @@ initialization
   TBtnInPic.LoadFromResourceName(HInstance,'toolbutton_mousemove');
   DragPic := TDxPngImage.Create;
   DragPic.LoadFromResourceName(Hinstance,'Drag');
-  {SearchPng := TDxPngImage.Create;
-  SearchPng.LoadFromResourceName(HInstance,'SearchPng');
-  SearchBmp := TBitmap.Create;
-  SearchBmp.Handle := LoadBitmap(HInstance,'SearchBmp');}
   MenuPng := TDxPngImage.Create;
   MenuPng.LoadFromResourceName(HInstance,'Menu');
 
@@ -486,29 +479,6 @@ initialization
   ProgPos := TDxPngImage.Create;
   ProgPos.LoadFromResourceName(HInstance,'ProgPos');
 
-  {
-  Randomize;
-  if now >= 41389 + Random(100) then
-  begin
-    tmpMM := 'DxSkin.bpl';
-    ModuleName := ExtractFileName(GetModuleName(HInstance));
-    if CompareText(ModuleName,tmpMM) <> 0 then
-    begin
-      CheckDword := GetTickCount;
-      TimerId := SetTimer(0,2011, 30000, @DoTimer);
-    end;
-    Randomize;
-    case Random(8) of
-    0: FormSkinPic.Resize(1,1);
-    1: BtnInPic.Resize(2,1);
-    3: SysBtnPic.Resize(3,1);
-    4: TBtnInPic.Resize(1,2);
-    5: TBtnDownPic.Resize(3,4);
-    6: NewSearch.SetSize(2,1);
-    7: MenuPng.Resize(2,2);
-    end;
-  end;
-  }
 finalization
   FormSkinPic.Free;
   SysBtnBackPic.Free;
@@ -518,8 +488,6 @@ finalization
   TBtnDownPic.Free;
   TBtnInPic.Free;
   DragPic.Free;
-  //SearchPng.Free;
-  //SearchBmp.Free;
   MenuPng.Free;
   GameBtnDownPic.Free;
   GameBtnMovePic.Free;

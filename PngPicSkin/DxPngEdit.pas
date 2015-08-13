@@ -37,6 +37,12 @@ type
 
   TTextChars = array of TTextChar;
 
+
+  TDxEditSkin = class(TDxButtonSkin)
+  public
+    constructor Create(AOwner: TComponent); override;
+  end;
+
   TDxCustomPngEdit = class(TDxPngUIControl)
   private
     FReadOnly: Boolean;
@@ -699,15 +705,19 @@ var
   st: string;
   tmpbmp: TBitmap;
   CursorPosX: Integer;
+  Png: TDxPngImage;
+  Skin: TDxUISkin;
 begin
+  Png := nil;
   if csDesigning in ComponentState then
   begin
     if not FNormalPng.Empty then
-      ToCanvas.Draw(DestRect.Left,DestRect.Top,FNormalPng)
-    else
+      Png := FNormalPng
+    else if (PngUIEngine <> nil) and (PngUIEngine.UISkins <>  nil) then
     begin
-      ToCanvas.Brush.Color := FFrameColor;
-      ToCanvas.FrameRect(DestRect);
+      Skin := PngUIEngine.UISkins.GetSkin(self);
+      if (Skin <> nil) and not TDxEditSkin(Skin).NormalPng.Empty then
+        Png := TDxEditSkin(Skin).NormalPng;
     end;
   end
   else if IsMouseIn then
@@ -715,25 +725,33 @@ begin
     if IsMouseDown then
     begin
       if not FMouseDownPng.Empty then
-        ToCanvas.Draw(DestRect.Left,DestRect.Top,FMouseDownPng)
-      else
+        Png := FMouseDownPng
+      else if (PngUIEngine <> nil) and (PngUIEngine.UISkins <>  nil) then
       begin
-        ToCanvas.Brush.Color := FFrameColor;
-        ToCanvas.FrameRect(DestRect);
+        Skin := PngUIEngine.UISkins.GetSkin(self);
+        if (Skin <> nil) and not TDxEditSkin(Skin).MouseDownPng.Empty then
+          Png := TDxEditSkin(Skin).MouseDownPng;
       end;
     end
     else if not FMouseMovePng.Empty then
-      ToCanvas.Draw(DestRect.Left,DestRect.Top,FMouseMovePng)
-    else
+      Png := FMouseMovePng
+    else if (PngUIEngine <> nil) and (PngUIEngine.UISkins <>  nil) then
     begin
-      ToCanvas.Brush.Color := FFrameColor;
-      ToCanvas.FrameRect(DestRect);
+      Skin := PngUIEngine.UISkins.GetSkin(self);
+      if (Skin <> nil) and not TDxEditSkin(Skin).MouseMovePng.Empty then
+        Png := TDxEditSkin(Skin).MouseMovePng;
     end;
   end
   else if not FNormalPng.Empty then
+    Png := FNormalPng
+  else if (PngUIEngine <> nil) and (PngUIEngine.UISkins <>  nil) then
   begin
-     ToCanvas.Draw(DestRect.Left,DestRect.Top,FNormalPng);
-  end
+    Skin := PngUIEngine.UISkins.GetSkin(self);
+    if (Skin <> nil) and not TDxEditSkin(Skin).NormalPng.Empty then
+      Png := TDxEditSkin(Skin).NormalPng;
+  end;
+  if Png <> nil then
+    ToCanvas.Draw(DestRect.Left,DestRect.Top,Png)
   else
   begin
     ToCanvas.Brush.Color := FFrameColor;
@@ -1070,6 +1088,14 @@ begin
   DrawCursor := True;
   CursorUpdateTime.Enabled := True;
   Invalidate;
+end;
+
+{ TDxEditSkin }
+
+constructor TDxEditSkin.Create(AOwner: TComponent);
+begin
+  inherited;
+  FUIControlClass := 'TDxPngEdit'
 end;
 
 end.
