@@ -91,7 +91,9 @@ type
     FOnKeyPress: TKeyPressEvent;
     FOnKeyDown: TKeyEvent;
     FOnKeyUp: TKeyEvent;
+    FIngoreAlpha: Boolean;
     procedure WMPaint(var Message: TWMPaint); message WM_PAINT;
+    procedure SetIngoreAlpha(const Value: Boolean);
   protected
     function DoKeyDown(var Message: TWMKey): Boolean;
     function DoKeyPress(var Message: TWMKey): Boolean;
@@ -135,6 +137,7 @@ type
     procedure BringToFront;
   published
     property PngUIEngine: TDxFormPngUIEngine read FPngUIEngine write SetPngUIEngine;
+    property IngoreAlpha: Boolean read FIngoreAlpha write SetIngoreAlpha default False; //是否忽略控件自身的透明通道
   end;
 
   TDxUISkins = class(TComponent)
@@ -548,6 +551,7 @@ begin
       r := c.BoundsRect;
       C.PaintUI(bmp.Canvas,r);
       //重置控件的透明通道
+      if C.FIngoreAlpha then      
       for y := r.Top to r.Bottom - 1 do
       begin
         pb := bmp.ScanLine[y];
@@ -1119,6 +1123,15 @@ begin
   //调整到列表的0
   index := FPngUIEngine.LinkPngControls.IndexOf(Self);
   FPngUIEngine.LinkPngControls.Move(index,0);
+end;
+
+procedure TDxPngUIControl.SetIngoreAlpha(const Value: Boolean);
+begin
+  if FIngoreAlpha <> Value then
+  begin
+    FIngoreAlpha := Value;    
+    Invalidate;
+  end;
 end;
 
 procedure TDxPngUIControl.SetParent(AParent: TWinControl);

@@ -162,6 +162,7 @@ type
     property OnKeyDown;
     property OnKeyPress;
     property OnKeyUp;
+    property IngoreAlpha default True;
   end;
 implementation
 uses Clipbrd,Math;
@@ -221,6 +222,7 @@ end;
 constructor TDxCustomPngEdit.Create(AOwner: TComponent);
 begin
   inherited;
+  IngoreAlpha := True;
   FFrameColor := clBlue;
   ControlStyle := ControlStyle + [csClickEvents];
   IsMouseDown := False;
