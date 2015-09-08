@@ -11,7 +11,7 @@ uses Dialogs,DxPngFormUI,DxPngEdit;
 procedure register;
 begin
   RegisterComponents('DxPngFormUI',[TDxFormPngUIEngine,TDxPngUIButton,TDxPngProgress,TDxPngLabel,TDxPngEdit,TDxPngFormControl,
-    TDxUISkins,TDxButtonSkin,TDxEditSkin]);
+    TDxUISkins,TDxButtonSkin,TDxEditSkin,TDxDropDownButton]);
 end;
 
 end.
