@@ -2064,7 +2064,7 @@ begin
   if FDropDownMenu <> Value then
   begin
      FDropDownMenu := Value;
-     if FDropDownMenu <> Value then
+     if FDropDownMenu <> nil then
      begin
        FDropDownMenu.ParentBiDiModeChanged(Self);
        FDropDownMenu.FreeNotification(Self);
