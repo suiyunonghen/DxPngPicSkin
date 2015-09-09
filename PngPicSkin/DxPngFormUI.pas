@@ -30,7 +30,7 @@ interface
   {$MESSAGE FATAL '本控件只支持XE及其XE之后的版本.'}
 {$ifend}
 uses Windows,Classes,Messages,SysUtils, Forms,Controls,Graphics,ExtCtrls,
-DxSkinConsts,Gdiplus,pngimage2010,Generics.Collections;
+DxSkinConsts,Gdiplus,pngimage2010,Generics.Collections,Menus;
 
 type
   TDxPngUIControl = class;
@@ -196,12 +196,14 @@ type
     IsLDown: Boolean;
     FCapShadowColor: TColor;
     FIcon: TIcon;
+    FFlatFrameColor: TColor;
     procedure SetMouseDownPng(const Value: TDxPngImage);
     procedure SetMouseMovePng(const Value: TDxPngImage);
     procedure SetNormalPng(const Value: TDxPngImage);
     procedure SetTextPng(const Value: TDxPngImage);
     procedure SetCapShadowColor(const Value: TColor);
     procedure SetIcon(const Value: TIcon);
+    procedure SetFlatFrameColor(const Value: TColor);
   protected
     procedure PaintUI(ToCanvas: TCanvas;DestRect: TRect);override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState;
@@ -213,6 +215,8 @@ type
     procedure DoPicChange(Sender: TObject);
     procedure DrawCaption(ToCanvas: TCanvas;DestRect: TRect);
     procedure DoIconChange(Sender: TObject);
+    procedure Paint;override;
+
   public
     constructor Create(AOwner: TComponent);override;
     procedure Click;override;
@@ -227,6 +231,20 @@ type
     property MouseMovePng: TDxPngImage read FMouseMovePng write SetMouseMovePng;
     property TextPng: TDxPngImage read FTextPng write SetTextPng;
     property Caption;
+    property FlatFrameColor: TColor read FFlatFrameColor write SetFlatFrameColor default clGray;
+    property Anchors;
+  end;
+
+  TDxDropDownButton = class(TDxPngUIButton)
+  private
+    FDropDownMenu: TPopupMenu;
+    procedure SetDropDownMenu(const Value: TPopupMenu);
+  protected
+    procedure Notification(AComponent: TComponent; Operation: TOperation);override;
+    procedure MouseUp(Button: TMouseButton; Shift: TShiftState;
+      X, Y: Integer); override;
+  published
+    property DropDownMenu: TPopupMenu read FDropDownMenu write SetDropDownMenu;
   end;
 
   TDxPngLabel = class(TDxPngUIControl)
@@ -551,7 +569,7 @@ begin
       r := c.BoundsRect;
       C.PaintUI(bmp.Canvas,r);
       //重置控件的透明通道
-      if C.FIngoreAlpha then      
+      if C.FIngoreAlpha then
       for y := r.Top to r.Bottom - 1 do
       begin
         pb := bmp.ScanLine[y];
@@ -1129,7 +1147,7 @@ procedure TDxPngUIControl.SetIngoreAlpha(const Value: Boolean);
 begin
   if FIngoreAlpha <> Value then
   begin
-    FIngoreAlpha := Value;    
+    FIngoreAlpha := Value;
     Invalidate;
   end;
 end;
@@ -1217,18 +1235,21 @@ end;
 procedure TDxPngUIButton.CMMouseEnter(var msg: TMessage);
 begin
   IsMouseIn := true;
+  Invalidate;
   inherited;
 end;
 
 procedure TDxPngUIButton.CMMouseLeave(var msg: TMessage);
 begin
   IsMouseIn := False;
+  Invalidate;
   inherited;
 end;
 
 constructor TDxPngUIButton.Create(AOwner: TComponent);
 begin
   inherited;
+  FFlatFrameColor := clGray;
   FIcon := TIcon.Create;
   FIcon.OnChange := DoIconChange;
   ControlStyle := ControlStyle + [csClickEvents];
@@ -1319,6 +1340,11 @@ begin
   R.Y := DestRect.Top;
   R.Width := Width;
   R.Height := Height;
+  if IsLDown then
+  begin
+    R.X := R.X + 2;
+    R.Y := R.Y + 2;
+  end;
 
   StringFormat.LineAlignment := saCenter;
   StringFormat.Alignment := saCenter;
@@ -1342,7 +1368,8 @@ begin
   inherited;
   IsLDown := True;
   if (FPngUIEngine <> nil) and not  (csDesigning in ComponentState) then
-    FPngUIEngine.UpdateLayered;
+    FPngUIEngine.UpdateLayered
+  else Invalidate;
 end;
 
 procedure TDxPngUIButton.MouseUp(Button: TMouseButton; Shift: TShiftState; X,
@@ -1351,7 +1378,13 @@ begin
   inherited;
   IsLDown := False;
   if (FPngUIEngine <> nil) and not  (csDesigning in ComponentState) then
-    FPngUIEngine.UpdateLayered;
+    FPngUIEngine.UpdateLayered
+  else Invalidate;
+end;
+
+procedure TDxPngUIButton.Paint;
+begin
+  PaintUI(Canvas,ClientRect);
 end;
 
 procedure TDxPngUIButton.PaintUI(ToCanvas: TCanvas;DestRect: TRect);
@@ -1405,7 +1438,7 @@ begin
     ToCanvas.Draw(DestRect.Left,DestRect.Top,Png)
   else
   begin
-    ToCanvas.Brush.Color := clBlue;
+    ToCanvas.Brush.Color := FFlatFrameColor;
     ToCanvas.FrameRect(DestRect);
   end;
 
@@ -1475,6 +1508,16 @@ end;
 procedure TDxPngUIButton.SetCapShadowColor(const Value: TColor);
 begin
   FCapShadowColor := Value;
+end;
+
+procedure TDxPngUIButton.SetFlatFrameColor(const Value: TColor);
+begin
+  if FFlatFrameColor <> Value then
+  begin
+    FFlatFrameColor := Value;
+    if (FPngUIEngine = nil) or  (csDesigning in ComponentState) then
+      Invalidate;
+  end;
 end;
 
 procedure TDxPngUIButton.SetIcon(const Value: TIcon);
@@ -1896,7 +1939,7 @@ begin
   begin
     Engine := FEngines[i];
     Engine.UpdateLayered;
-  end;    
+  end;
 end;
 
 constructor TDxUISkins.Create(AOwner: TComponent);
@@ -1910,7 +1953,7 @@ destructor TDxUISkins.Destroy;
 var
   Pair: TPair<String,TDxUISkin>;
 begin
-  while FEngines.Count > 0 do  
+  while FEngines.Count > 0 do
     TDxFormPngUIEngine(FEngines[FEngines.Count - 1]).UISkins := nil;
   for Pair in FUISkins do
     Pair.Value.UISkins := nil;
@@ -1989,4 +2032,45 @@ begin
 end;
 
 
+{ TDxDropDownButton }
+
+procedure TDxDropDownButton.MouseUp(Button: TMouseButton; Shift: TShiftState;
+  X, Y: Integer);
+var
+  p: TPoint;
+begin
+  inherited;
+  if FDropDownMenu <> nil then
+  begin
+    p.X := Left;p.Y := top + Height;
+    p := Parent.ClientToScreen(p);
+    FDropDownMenu.Popup(p.X,p.Y);
+  end;
+end;
+
+procedure TDxDropDownButton.Notification(AComponent: TComponent;
+  Operation: TOperation);
+begin
+  inherited Notification(AComponent, Operation);
+  if Operation = opRemove then
+  begin
+    if AComponent = FDropDownMenu then
+      FDropDownMenu := nil
+  end;
+end;
+
+procedure TDxDropDownButton.SetDropDownMenu(const Value: TPopupMenu);
+begin
+  if FDropDownMenu <> Value then
+  begin
+     FDropDownMenu := Value;
+     if FDropDownMenu <> nil then
+     begin
+       FDropDownMenu.ParentBiDiModeChanged(Self);
+       FDropDownMenu.FreeNotification(Self);
+     end;
+  end;
+end;
+
 end.
+
