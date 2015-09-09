@@ -1221,7 +1221,7 @@ begin
       if (avail_out = 0) then
       begin
         {Reallocates output buffer}
-                                           
+
         Inc(OutputSize, 256);
         if Output = nil then
           GetMem(Output, OutputSize) else ReallocMem(Output, OutputSize);
@@ -3259,7 +3259,7 @@ begin
         Row_Buffer[RowUsed][Col] := (pp + vv) and $FF;
       end {for};
     end;
-      
+
   end {case};
 end;
 
@@ -4654,7 +4654,7 @@ begin
       end;
     {Palette images with 1 byte for each pixel}
     1,4,8: if Header.ColorType = COLOR_GRAYSCALEALPHA then
-                                         
+
       FOR j := 1 TO H DO
       begin
         {Process all the pixels in this line}
@@ -4698,7 +4698,7 @@ begin
       end
     else {Palette images}
     begin
-                                           
+
       {Obtain pointer to the transparency chunk}
       TransparencyChunk := TChunktRNS(Chunks.ItemFromClass(TChunktRNS));
       PaletteChunk := TChunkPLTE(Chunks.ItemFromClass(TChunkPLTE));
@@ -6054,5 +6054,3 @@ finalization
   {Free chunk classes}
   FreeChunkClassList;
 end.
-
-
