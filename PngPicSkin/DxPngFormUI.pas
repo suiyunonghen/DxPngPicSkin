@@ -445,6 +445,8 @@ end;
 procedure TDxFormPngUIEngine.SetBackPng(Value: TDxPngImage);
 begin
   FBackPng.Assign(Value);
+  if csDesigning in ComponentState then
+    TTargetControl(FForm).RecreateWnd;
 end;
 
 procedure TDxFormPngUIEngine.SetBackTopCenter(const Value: Boolean);
@@ -453,7 +455,7 @@ begin
   begin
     FBackTopCenter := Value;
     if csDesigning in ComponentState then
-      FForm.Perform(WM_PAINT,0,0)
+      TTargetControl(FForm).RecreateWnd
     else UpdateLayered;
   end;
 end;
