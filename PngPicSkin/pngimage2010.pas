@@ -2,19 +2,13 @@
 {                                                       }
 {            Delphi Visual Component Library            }
 {                                                       }
-{ Copyright(c) 1995-2010 Embarcadero Technologies, Inc. }
+{ Copyright(c) 1995-2014 Embarcadero Technologies, Inc. }
 {                                                       }
 {      Original version written by Gustavo Daud         }
 {                                                       }
 {*******************************************************}
 
-{
- 本单元版权归EMB所有，是Delphi2010中的PngImage单元的改写
- Png增加了DrawToDest等PNG缩放的函数
- 其他的变化应该不大，具体也不记得了
- 修改者：不得闲(75492895)
-}
-unit pngimage2010;
+unit PngImage2010;
 
 interface
 
@@ -29,11 +23,23 @@ interface
 {$DEFINE Store16bits}            //Stores the extra 8 bits from 16bits/sample
 {$RANGECHECKS OFF} {$J+}
 
-{$HPPEMIT '#pragma link "pngimage.obj"'} //Resolve linkage for C++
+{$HPPEMIT ''}
+{$HPPEMIT '#ifdef USEPACKAGES'}
+{$HPPEMIT ' #pragma link "vclimg.bpi"'}
+{$HPPEMIT '#else'}
+{$HPPEMIT ' #ifndef _WIN64'}
+{$HPPEMIT '  #pragma link "vclimg.lib"'}
+{$HPPEMIT ' #else'}
+{$HPPEMIT '  #pragma link "vclimg.a"'}
+{$HPPEMIT ' #endif'}
+{$HPPEMIT '#endif'}
+{$IF CompilerVersion >= 26} // XE5之后的版本
+{$HPPEMIT LINKUNIT} //Resolve linkage for C++
+{$IFEND}
 
 uses
  Windows {$IFDEF UseDelphi}, Classes, Graphics, SysUtils{$ENDIF},
- zlib, pnglang;
+ ZLib,pnglang;
 
 const
   LibraryVersion = '1.564';
@@ -80,6 +86,10 @@ type
     TColor = ColorRef;
   {$ENDIF}
 
+
+  {$IF CompilerVersion < 24} // XE5之后的版本
+   Uintptr = LongInt;
+  {$IFEND}
   {Error types}
   EPNGOutMemory = class(Exception);
   EPngError = class(Exception);
@@ -111,7 +121,7 @@ type
 
   {Same as TBitmapInfo but with allocated space for}
   {palette entries}
-  TMAXBITMAPINFO = packed record
+  TMAXBITMAPINFO = record
     bmiHeader: TBitmapInfoHeader;
     bmiColors: packed array[0..255] of TRGBQuad;
   end;
@@ -122,7 +132,7 @@ type
   pCardinal = ^Cardinal;
   {Access to a rgb pixel}
   pRGBPixel = ^TRGBPixel;
-  TRGBPixel = packed record
+  TRGBPixel = record
     B, G, R: Byte;
   end;
 
@@ -339,7 +349,6 @@ type
     {Returns a pixel}
     function GetPixels(const X, Y: Integer): TColor; virtual;
     procedure SetPixels(const X, Y: Integer; const Value: TColor); virtual;
-    procedure DrawPngLayerialTransEx(DC: HDC;Srect, Rect: TRect);
   public
     {Gamma table array}
     GammaTable: Array[Byte] of Byte;
@@ -392,11 +401,6 @@ type
     {Draws the image into a canvas}
     procedure Draw(ACanvas: TCanvas; const Rect: TRect);
       {$IFDEF UseDelphi}override;{$ENDIF}
-
-    procedure DrawToDest(ACanvas: TCanvas;const SelfRect,DestRect: TRect);overload;
-    procedure DrawToDest(Dc: HDC;const SelfRect,DestRect: TRect);overload;
-    procedure DrawToDC(DC: HDC;const Rect: TRect);
-
     {Width and height properties}
     property Width: Integer read GetWidth;
     property Height: Integer read GetHeight;
@@ -488,9 +492,10 @@ type
   {Chunk classes}
   TChunkIEND = class(TChunk);     {End chunk}
 
+{$ALIGN 1}
   {IHDR data}
   pIHDRData = ^TIHDRData;
-  TIHDRData = packed record
+  TIHDRData = record
     Width, Height: Cardinal;
     BitDepth,
     ColorType,
@@ -498,6 +503,7 @@ type
     FilterMethod,
     InterlaceMethod: Byte;
   end;
+{$ALIGN ON}
 
   {Information header chunk}
   TChunkIHDR = class(TChunk)
@@ -508,16 +514,18 @@ type
     ImagePalette: HPalette;
     {Output windows bitmap}
     HasPalette: Boolean;
+
     {Stores the image bytes}
     {$IFDEF Store16bits}ExtraImageData: Pointer;{$ENDIF}
+
     ImageAlpha: Pointer;
 
     {Contains all the ihdr data}
     IHDRData: TIHDRData;
   protected
-    BitmapInfo: TMaxBitmapInfo;
-    ImageData: pointer;
     BytesPerRow: Integer;
+    ImageData: pointer;
+    BitmapInfo: TMaxBitmapInfo;
     {Creates a grayscale palette}
     function CreateGrayscalePalette(Bitdepth: Integer): HPalette;
     {Copies the palette to the Device Independent bitmap header}
@@ -593,7 +601,7 @@ type
   end;
 
   {ZLIB Decompression extra information}
-  TZStreamRec2 = packed record
+  TZStreamRec2 = record
     {From ZLIB}
     ZLIB: TZStreamRec;
     {Additional info}
@@ -829,9 +837,17 @@ function update_crc(crc: {$IFNDEF DelphiBuilder3Less}Cardinal{$ELSE}Integer
 {Invert bytes using assembly}
 function ByteSwap(const a: integer): integer;
 
-type
-  TDxPngImage = class(TPngImage);
 
+type
+  TDxPngImage = class(TPngImage)
+  protected
+    procedure DrawPngLayerialTransEx(DC: HDC; Srect, Rect: TRect);
+  public
+    procedure DrawToDest(ACanvas: TCanvas;
+      const SelfRect, DestRect: TRect); overload;
+    procedure DrawToDest(DC: HDC; const SelfRect, DestRect: TRect); overload;
+    procedure DrawToDC(DC: HDC; const Rect: TRect);
+  end;
 implementation
 
 var
@@ -990,7 +1006,7 @@ end;
   begin
     FindFile := FindFirstFile(PChar(Filename), FindData);
     Result := FindFile <> INVALID_HANDLE_VALUE;
-    if Result then Windows.FindClose(FindFile);
+    if Result then Winapi.Windows.FindClose(FindFile);
   end;
 
 
@@ -1023,16 +1039,63 @@ begin
       Result := c;
 end;
 
-{Invert bytes using assembly}
-function ByteSwap(const a: integer): integer;
+{ Invert bytes using assembly }
+function ByteSwap(const a: Integer): Integer;
+{$IF CompilerVersion <= 23}
 asm
-  bswap eax
+  BSWAP EAX
 end;
-function ByteSwap16(inp:word): word;
+{$ELSE}
+{$IFDEF PUREPASCAL}
+begin
+  pByte(@Result)[0] := pByte(@a)[3];
+  pByte(@Result)[1] := pByte(@a)[2];
+  pByte(@Result)[2] := pByte(@a)[1];
+  pByte(@Result)[3] := pByte(@a)[0];
+end;
+{$ELSE !PUREPASCAL}
+{$IFDEF CPUX86}
 asm
-  bswap eax
-  shr   eax, 16
+  BSWAP EAX
 end;
+{$ENDIF}
+{$IFDEF CPUX64}
+asm
+  MOV   EAX, ECX
+  BSWAP EAX
+end;
+{$ENDIF}
+{$ENDIF PUREPASCAL}
+{$IFEND}
+
+function ByteSwap16(inp: word): word;
+{$IF CompilerVersion <= 23}
+asm
+  BSWAP EAX
+  SHR   EAX, 16
+end;
+{$ELSE}
+{$IFDEF PUREPASCAL}
+begin
+  pByte(@Result)[0] := pByte(@inp)[1];
+  pByte(@Result)[1] := pByte(@inp)[0];
+end;
+{$ELSE !PUREPASCAL}
+{$IFDEF CPUX86}
+asm
+  BSWAP EAX
+  SHR   EAX, 16
+end;
+{$ENDIF}
+{$IFDEF CPUX64}
+asm
+  MOV   EAX, ECX
+  BSWAP EAX
+  SHR   EAX, 16
+end;
+{$ENDIF}
+{$ENDIF PUREPASCAL}
+{$IFEND}
 
 {Calculates number of bytes for the number of pixels using the}
 {color mode in the paramenter}
@@ -1221,11 +1284,11 @@ begin
       if (avail_out = 0) then
       begin
         {Reallocates output buffer}
-
+                                           
         Inc(OutputSize, 256);
         if Output = nil then
           GetMem(Output, OutputSize) else ReallocMem(Output, OutputSize);
-        next_out := Pointer(Integer(Output) + total_out);
+        next_out := Pointer(PByte(Output) + total_out);
         avail_out := 256;
       end {if (avail_out = 0)};
 
@@ -1293,7 +1356,7 @@ begin
           GetMem(Output, OutputSize) else ReallocMem(Output, OutputSize);
 
         {Copies the new data}
-        CopyMemory(Ptr(Longint(Output) + OutputSize - total_out),
+        CopyMemory(PByte(Output) + OutputSize - total_out,
           @Buffer, total_out);
       end {if (InflateRet = Z_STREAM_END) or (InflateRet = 0)}
       {Now tests for errors}
@@ -1463,16 +1526,15 @@ begin
   else if ((ChunkClass = TChunkgAMA) and (ItemFromClass(TChunkgAMA) <> nil)) or
      ((ChunkClass = TChunktRNS) and (ItemFromClass(TChunktRNS) <> nil)) or
      ((ChunkClass = TChunkpHYs) and (ItemFromClass(TChunkpHYs) <> nil)) then
-    fOwner.RaiseError(EPngError, EPNGCannotAddChunkText)
+    fOwner.RaiseError(EPngError, EPNGCannotAddChunkText);
   {There must have an IEND and IHDR chunk}
-  else if ((ItemFromClass(TChunkIEND) = nil) or
-    (ItemFromClass(TChunkIHDR) = nil)) and not Owner.BeingCreated then
+  {Get common chunks}
+  IHDR := TChunkIHDR(ItemFromClass(TChunkIHDR));
+  IEND := TChunkIEND(ItemFromClass(TChunkIEND));
+  if ((IEND = nil) or (IHDR = nil)) and not Owner.BeingCreated then
     fOwner.RaiseError(EPngError, EPNGCannotAddInvalidImageText)
   else
   begin
-    {Get common chunks}
-    IHDR := ItemFromClass(TChunkIHDR) as TChunkIHDR;
-    IEND := ItemFromClass(TChunkIEND) as TChunkIEND;
     {Create new chunk}
     Result := ChunkClass.Create(Owner);
     {Add to the list}
@@ -1488,8 +1550,8 @@ begin
     else if (ChunkClass = TChunktRNS) then
     begin
       {Transparecy chunk must be after PLTE; before IDAT}
-      IDAT := ItemFromClass(TChunkIDAT) as TChunkIDAT;
-      PLTE := ItemFromClass(TChunkPLTE) as TChunkPLTE;
+      IDAT := TChunkIDAT(ItemFromClass(TChunkIDAT));
+      PLTE := TChunkPLTE(ItemFromClass(TChunkPLTE));
 
       if Assigned(PLTE) then
         Insert(Result, PLTE.Index + 1)
@@ -1683,7 +1745,7 @@ function TStream.GetSize: Longint;
   function TResourceStream.Read(var Buffer; Count: Integer): Cardinal;
   begin
     //Returns data
-    CopyMemory(@Buffer, Ptr(Longint(Memory) + Position), Count);
+    CopyMemory(@Buffer, PByte(Memory) + Position, Count);
     //Update position
     inc(Position, Count);
     //Returns
@@ -1865,12 +1927,12 @@ begin
   if not Result or (Size <> 7) then exit; {Size must be 7}
 
   {Reads data}
-  fYear := ((pByte(Longint(Data) )^) * 256)+ (pByte(Longint(Data) + 1)^);
-  fMonth := pByte(Longint(Data) + 2)^;
-  fDay := pByte(Longint(Data) + 3)^;
-  fHour := pByte(Longint(Data) + 4)^;
-  fMinute := pByte(Longint(Data) + 5)^;
-  fSecond := pByte(Longint(Data) + 6)^;
+  fYear := ((pByte(UIntPtr(Data) )^) * 256)+ (pByte(PByte(Data) + 1)^);
+  fMonth := pByte(PByte(Data) + 2)^;
+  fDay := pByte(PByte(Data) + 3)^;
+  fHour := pByte(PByte(Data) + 4)^;
+  fMinute := pByte(PByte(Data) + 5)^;
+  fSecond := pByte(PByte(Data) + 6)^;
 end;
 
 {Assigns from another TChunk}
@@ -1890,11 +1952,11 @@ begin
   {Update data}
   ResizeData(7);  {Make sure the size is 7}
   pWord(Data)^ := ByteSwap16(Year);
-  pByte(Longint(Data) + 2)^ := Month;
-  pByte(Longint(Data) + 3)^ := Day;
-  pByte(Longint(Data) + 4)^ := Hour;
-  pByte(Longint(Data) + 5)^ := Minute;
-  pByte(Longint(Data) + 6)^ := Second;
+  pByte(PByte(Data) + 2)^ := Month;
+  pByte(PByte(Data) + 3)^ := Day;
+  pByte(PByte(Data) + 4)^ := Hour;
+  pByte(PByte(Data) + 5)^ := Minute;
+  pByte(PByte(Data) + 6)^ := Second;
 
   {Let inherited save data}
   Result := inherited SaveToStream(Stream);
@@ -1915,17 +1977,17 @@ begin
   Result := inherited LoadFromStream(Stream, ChunkName, Size);
   if not Result or (Size < 4) then exit;
   fKeyword := PAnsiChar(Data);  {Get keyword and compression method bellow}
-  if Longint(fKeyword) = 0 then
+  if UIntPtr(fKeyword) = 0 then
     CompressionMethod := pByte(Data)^
   else
-    CompressionMethod := pByte(Longint(fKeyword) + Length(fKeyword))^;
+    CompressionMethod := PByte(PByte(fKeyword) + Length(fKeyword))^;
   fText := '';
 
   {In case the compression is 0 (only one accepted by specs), reads it}
   if CompressionMethod = 0 then
   begin
     Output := nil;
-    if DecompressZLIB(PAnsiChar(Longint(Data) + Length(fKeyword) + 2),
+    if DecompressZLIB(PAnsiChar(PByte(Data) + Length(fKeyword) + 2),
       Size - Length(fKeyword) - 2, Output, OutputSize, ErrorOutput) then
     begin
       SetLength(fText, OutputSize);
@@ -1959,9 +2021,9 @@ begin
     if Keyword <> '' then
       CopyMemory(Data, @fKeyword[1], Length(Keyword));
     {Compression method 0 (inflate/deflate)}
-    pByte(Ptr(Longint(Data) + Length(Keyword) + 1))^ := 0;
+    PByte(PByte(Data) + Length(Keyword) + 1)^ := 0;
     if OutputSize > 0 then
-      CopyMemory(Ptr(Longint(Data) + Length(Keyword) + 2), Output, OutputSize);
+      CopyMemory(PByte(Data) + Length(Keyword) + 2, Output, OutputSize);
 
     {Let ancestor calculate crc and save}
     Result := SaveData(Stream);
@@ -1990,8 +2052,7 @@ begin
   {Get text}
   fKeyword := PAnsiChar(Data);
   SetLength(fText, Size - Length(fKeyword) - 1);
-  CopyMemory(@fText[1], Ptr(Longint(Data) + Length(fKeyword) + 1),
-    Length(fText));
+  CopyMemory(@fText[1], PByte(Data) + Length(fKeyword) + 1, Length(fText));
 end;
 
 {Saving the chunk to a stream}
@@ -2005,7 +2066,7 @@ begin
   if Keyword <> '' then
     CopyMemory(Data, @fKeyword[1], Length(Keyword));
   if Text <> '' then
-    CopyMemory(Ptr(Longint(Data) + Length(Keyword) + 1), @fText[1],
+    CopyMemory(PByte(Data) + Length(Keyword) + 1, @fText[1],
       Length(Text));
   {Let ancestor calculate crc and save}
   Result := inherited SaveToStream(Stream);
@@ -2367,7 +2428,7 @@ begin
       COLOR_PALETTE:
       begin
         {Obtains the palette chunk}
-        PaletteChunk := Owner.Chunks.ItemFromClass(TChunkPLTE) as TChunkPLTE;
+        PaletteChunk := TChunkPLTE(Owner.Chunks.ItemFromClass(TChunkPLTE));
 
         {Looks for an entry with 0 transparency meaning that it is the}
         {full transparent entry}
@@ -2540,7 +2601,7 @@ begin
         {In case there is no more compressed data to read from}
         if avail_in = 0 then
         begin
-          Result := Count - avail_out;
+          Result := Cardinal(Count) - Cardinal(avail_out);
           Exit;
         end;
 
@@ -2585,12 +2646,12 @@ var
 begin
   {Get first column and enter in loop}
   Col := ColumnStart[Pass];
-  Dest := pByte(Longint(Dest) + Col * 3);
+  Dest := Dest + Col * 3;
   repeat
     {Copy this row}
-    PByte(Dest)^ := fOwner.GammaTable[pByte(Longint(Src) + 2)^]; inc(Dest);
-    PByte(Dest)^ := fOwner.GammaTable[pByte(Longint(Src) + 1)^]; inc(Dest);
-    PByte(Dest)^ := fOwner.GammaTable[pByte(Longint(Src)    )^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src + 2)^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src + 1)^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src    )^]; inc(Dest);
 
     {Move to next column}
     inc(Src, 3);
@@ -2607,17 +2668,17 @@ var
 begin
   {Get first column and enter in loop}
   Col := ColumnStart[Pass];
-  Dest := pByte(Longint(Dest) + Col * 3);
+  Dest := Dest + Col * 3;
   repeat
     {Copy this row}
-    PByte(Dest)^ := Owner.GammaTable[pByte(Longint(Src) + 4)^]; inc(Dest);
-    PByte(Dest)^ := Owner.GammaTable[pByte(Longint(Src) + 2)^]; inc(Dest);
-    PByte(Dest)^ := Owner.GammaTable[pByte(Longint(Src)    )^]; inc(Dest);
+    Dest^ := Owner.GammaTable[pByte(Src + 4)^]; inc(Dest);
+    Dest^ := Owner.GammaTable[pByte(Src + 2)^]; inc(Dest);
+    Dest^ := Owner.GammaTable[pByte(Src    )^]; inc(Dest);
     {$IFDEF Store16bits}
     {Copy extra pixel values}
-    PByte(Extra)^ := fOwner.GammaTable[pByte(Longint(Src) + 5)^]; inc(Extra);
-    PByte(Extra)^ := fOwner.GammaTable[pByte(Longint(Src) + 3)^]; inc(Extra);
-    PByte(Extra)^ := fOwner.GammaTable[pByte(Longint(Src) + 1)^]; inc(Extra);
+    Extra^ := fOwner.GammaTable[pByte(Src + 5)^]; inc(Extra);
+    Extra^ := fOwner.GammaTable[pByte(Src + 3)^]; inc(Extra);
+    Extra^ := fOwner.GammaTable[pByte(Src + 1)^]; inc(Extra);
     {$ENDIF}
 
     {Move to next column}
@@ -2644,7 +2705,7 @@ begin
     CurBit := StartBit[Header.BitDepth];
     repeat
       {Adjust pointer to pixel byte bounds}
-      Dest2 := pByte(Longint(Dest) + (Header.BitDepth * Col) div 8);
+      Dest2 := Dest + (Header.BitDepth * Col) div 8;
       {Copy data}
       PByte(Dest2)^ := Byte(Dest2^) or
         ( ((Byte(Src^) shr CurBit) and BitTable[Header.BitDepth])
@@ -2675,7 +2736,7 @@ begin
     CurBit := 6;
     repeat
       {Adjust pointer to pixel byte bounds}
-      Dest2 := pByte(Longint(Dest) + Col div 2);
+      Dest2 := Dest + Col div 2;
       {Copy data}
       PByte(Dest2)^ := Byte(Dest2^) or (((Byte(Src^) shr CurBit) and $3)
          shl (4 - (4 * Col) mod 8));
@@ -2704,7 +2765,7 @@ begin
     CurBit := 6;
     repeat
       {Adjust pointer to pixel byte bounds}
-      Dest2 := pByte(Longint(Dest) + Col div 2);
+      Dest2 := Dest + Col div 2;
       {Copy data}
       PByte(Dest2)^ := Byte(Dest2^) or ((((Byte(Src^) shr CurBit) shl 2) and $F)
          shl (4 - (Col*4) mod 8));
@@ -2727,12 +2788,12 @@ var
 begin
   {Get first column and enter in loop}
   Col := ColumnStart[Pass];
-  Dest := pByte(Longint(Dest) + Col);
+  Dest := Dest + Col;
   repeat
     {Copy this row}
     Dest^ := Src^; inc(Dest);
     {$IFDEF Store16bits}
-    Extra^ := pByte(Longint(Src) + 1)^; inc(Extra);
+    Extra^ := PByte(Src + 1)^; inc(Extra);
     {$ENDIF}
 
     {Move to next column}
@@ -2750,14 +2811,14 @@ var
 begin
   {Get first column and enter in loop}
   Col := ColumnStart[Pass];
-  Dest := pByte(Longint(Dest) + Col * 3);
-  Trans := pByte(Longint(Trans) + Col);
+  Dest := Dest + Col * 3;
+  Trans := Trans + Col;
   repeat
     {Copy this row and alpha value}
-    Trans^ := pByte(Longint(Src) + 3)^;
-    PByte(Dest)^  := fOwner.GammaTable[pByte(Longint(Src) + 2)^]; inc(Dest);
-    PByte(Dest)^  := fOwner.GammaTable[pByte(Longint(Src) + 1)^]; inc(Dest);
-    PByte(Dest)^  := fOwner.GammaTable[pByte(Longint(Src)    )^]; inc(Dest);
+    Trans^ := pByte(Src + 3)^;
+    Dest^ := fOwner.GammaTable[pByte(Src + 2)^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src + 1)^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src    )^]; inc(Dest);
 
     {Move to next column}
     inc(Src, 4);
@@ -2775,19 +2836,19 @@ var
 begin
   {Get first column and enter in loop}
   Col := ColumnStart[Pass];
-  Dest := pByte(Longint(Dest) + Col * 3);
-  Trans := pByte(Longint(Trans) + Col);
+  Dest := Dest + Col * 3;
+  Trans := Trans + Col;
   repeat
     {Copy this row and alpha value}
-    Trans^ := pByte(Longint(Src) + 6)^;
-    PByte(Dest)^  := fOwner.GammaTable[pByte(Longint(Src) + 4)^]; inc(Dest);
-    PByte(Dest)^  := fOwner.GammaTable[pByte(Longint(Src) + 2)^]; inc(Dest);
-    PByte(Dest)^  := fOwner.GammaTable[pByte(Longint(Src)    )^]; inc(Dest);
+    Trans^ := pByte(Src + 6)^;
+    PByte(Dest)^  := fOwner.GammaTable[pByte(Src + 4)^]; inc(Dest);
+    PByte(Dest)^  := fOwner.GammaTable[pByte(Src + 2)^]; inc(Dest);
+    PByte(Dest)^  := fOwner.GammaTable[pByte(Src    )^]; inc(Dest);
     {$IFDEF Store16bits}
     {Copy extra pixel values}
-    PByte(Extra)^ := fOwner.GammaTable[pByte(Longint(Src) + 5)^]; inc(Extra);
-    PByte(Extra)^ := fOwner.GammaTable[pByte(Longint(Src) + 3)^]; inc(Extra);
-    PByte(Extra)^ := fOwner.GammaTable[pByte(Longint(Src) + 1)^]; inc(Extra);
+    Extra^ := fOwner.GammaTable[pByte(Src + 5)^]; inc(Extra);
+    Extra^ := fOwner.GammaTable[pByte(Src + 3)^]; inc(Extra);
+    Extra^ := fOwner.GammaTable[pByte(Src + 1)^]; inc(Extra);
     {$ENDIF}
 
     {Move to next column}
@@ -2806,8 +2867,8 @@ var
 begin
   {Get first column, pointers to the data and enter in loop}
   Col := ColumnStart[Pass];
-  Dest := pByte(Longint(Dest) + Col);
-  Trans := pByte(Longint(Trans) + Col);
+  Dest := Dest + Col;
+  Trans := Trans + Col;
   repeat
     {Copy this grayscale value and alpha}
     Dest^ := Src^;  inc(Src);
@@ -2828,11 +2889,11 @@ var
 begin
   {Get first column, pointers to the data and enter in loop}
   Col := ColumnStart[Pass];
-  Dest := pByte(Longint(Dest) + Col);
-  Trans := pByte(Longint(Trans) + Col);
+  Dest := Dest + Col;
+  Trans := Trans + Col;
   repeat
     {$IFDEF Store16bits}
-    Extra^ := pByte(Longint(Src) + 1)^; inc(Extra);
+    Extra^ := pByte(Src + 1)^; inc(Extra);
     {$ENDIF}
     {Copy this grayscale value and alpha, transforming 16 bits into 8}
     Dest^ := Src^;  inc(Src, 2);
@@ -2904,12 +2965,12 @@ begin
     {Get current row index}
     CurrentRow := RowStart[CurrentPass];
     {Get a pointer to the current row image data}
-    Data := Ptr(Longint(Header.ImageData) + Header.BytesPerRow *
-      (ImageHeight - 1 - CurrentRow));
-    Trans := Ptr(Longint(Header.ImageAlpha) + ImageWidth * CurrentRow);
+    Data := PByte(Header.ImageData) + Header.BytesPerRow *
+      (ImageHeight - 1 - CurrentRow);
+    Trans := PByte(Header.ImageAlpha) + ImageWidth * CurrentRow;
     {$IFDEF Store16bits}
-    Extra := Ptr(Longint(Header.ExtraImageData) + Header.BytesPerRow *
-      (ImageHeight - 1 - CurrentRow));
+    Extra := PByte(Header.ExtraImageData) + Header.BytesPerRow *
+      (ImageHeight - 1 - CurrentRow);
     {$ENDIF}
 
     if Row_Bytes > 0 then {There must have bytes for this interlaced pass}
@@ -2951,9 +3012,9 @@ begin
   FOR I := 1 TO ImageWidth DO
   begin
     {Copy pixel values}
-    PByte(Dest)^ := fOwner.GammaTable[pByte(Longint(Src) + 2)^]; inc(Dest);
-    PByte(Dest)^ := fOwner.GammaTable[pByte(Longint(Src) + 1)^]; inc(Dest);
-    PByte(Dest)^ := fOwner.GammaTable[pByte(Longint(Src)    )^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src + 2)^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src + 1)^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src    )^]; inc(Dest);
     {Move to next pixel}
     inc(Src, 3);
   end {for I}
@@ -2970,14 +3031,14 @@ begin
     //Since windows does not supports 2 bytes for
     //each R, G, B value, the method will read only 1 byte from it
     {Copy pixel values}
-    PByte(Dest)^ := fOwner.GammaTable[pByte(Longint(Src) + 4)^]; inc(Dest);
-    PByte(Dest)^ := fOwner.GammaTable[pByte(Longint(Src) + 2)^]; inc(Dest);
-    PByte(Dest)^ := fOwner.GammaTable[pByte(Longint(Src)    )^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src + 4)^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src + 2)^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src    )^]; inc(Dest);
     {$IFDEF Store16bits}
     {Copy extra pixel values}
-    PByte(Extra)^ := fOwner.GammaTable[pByte(Longint(Src) + 5)^]; inc(Extra);
-    PByte(Extra)^ := fOwner.GammaTable[pByte(Longint(Src) + 3)^]; inc(Extra);
-    PByte(Extra)^ := fOwner.GammaTable[pByte(Longint(Src) + 1)^]; inc(Extra);
+    Extra^ := fOwner.GammaTable[pByte(Src + 5)^]; inc(Extra);
+    Extra^ := fOwner.GammaTable[pByte(Src + 3)^]; inc(Extra);
+    Extra^ := fOwner.GammaTable[pByte(Src + 1)^]; inc(Extra);
     {$ENDIF}
 
     {Move to next pixel}
@@ -3002,9 +3063,9 @@ begin
   {2 bits is not supported, this routine will converted into 4 bits}
   FOR i := 1 TO Row_Bytes do
   begin
-    PByte(Dest)^ := ((Byte(Src^) shr 2) and $F) or ((Byte(Src^)) and $F0);
+    Dest^ := ((Byte(Src^) shr 2) and $F) or ((Byte(Src^)) and $F0);
       inc(Dest);
-    PByte(Dest)^ := ((Byte(Src^) shl 2) and $F) or ((Byte(Src^) shl 4) and $F0);
+    Dest^ := ((Byte(Src^) shl 2) and $F) or ((Byte(Src^) shl 4) and $F0);
       inc(Dest);
     inc(Src);
   end {FOR i}
@@ -3019,9 +3080,9 @@ begin
   {2 bits is not supported, this routine will converted into 4 bits}
   FOR i := 1 TO Row_Bytes do
   begin
-    PByte(Dest)^ := ((Byte(Src^) shr 4) and $3) or ((Byte(Src^) shr 2) and $30);
+    Dest^ := ((Byte(Src^) shr 4) and $3) or ((Byte(Src^) shr 2) and $30);
       inc(Dest);
-    PByte(Dest)^ := (Byte(Src^) and $3) or ((Byte(Src^) shl 2) and $30);
+    Dest^ := (Byte(Src^) and $3) or ((Byte(Src^) shl 2) and $30);
       inc(Dest);
     inc(Src);
   end {FOR i}
@@ -3039,7 +3100,7 @@ begin
     {mode, so reduce to 8}
     Dest^ := Src^; inc(Dest);
     {$IFDEF Store16bits}
-    Extra^ := pByte(Longint(Src) + 1)^; inc(Extra);
+    Extra^ := pByte(Src + 1)^; inc(Extra);
     {$ENDIF}
 
     {Move to next pixel}
@@ -3056,10 +3117,10 @@ begin
   FOR I := 1 TO ImageWidth DO
   begin
     {Copy pixel values and transparency}
-    Trans^ := pByte(Longint(Src) + 3)^;
-    PByte(Dest)^  := fOwner.GammaTable[pByte(Longint(Src) + 2)^]; inc(Dest);
-    PByte(Dest)^  := fOwner.GammaTable[pByte(Longint(Src) + 1)^]; inc(Dest);
-    PByte(Dest)^  := fOwner.GammaTable[pByte(Longint(Src)    )^]; inc(Dest);
+    Trans^ := pByte(Src + 3)^;
+    Dest^ := fOwner.GammaTable[pByte(Src + 2)^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src + 1)^]; inc(Dest);
+    Dest^ := fOwner.GammaTable[pByte(Src    )^]; inc(Dest);
     {Move to next pixel}
     inc(Src, 4); inc(Trans);
   end {for I}
@@ -3075,15 +3136,15 @@ begin
   begin
     //Copy rgb and alpha values (transforming from 16 bits to 8 bits)
     {Copy pixel values}
-    Trans^ := pByte(Longint(Src) + 6)^;
-    PByte(Dest)^  := fOwner.GammaTable[pByte(Longint(Src) + 4)^]; inc(Dest);
-    PByte(Dest)^  := fOwner.GammaTable[pByte(Longint(Src) + 2)^]; inc(Dest);
-    PByte(Dest)^  := fOwner.GammaTable[pByte(Longint(Src)    )^]; inc(Dest);
+    Trans^ := pByte(Src + 6)^;
+    PByte(Dest)^  := fOwner.GammaTable[pByte(Src + 4)^]; inc(Dest);
+    PByte(Dest)^  := fOwner.GammaTable[pByte(Src + 2)^]; inc(Dest);
+    PByte(Dest)^  := fOwner.GammaTable[pByte(Src    )^]; inc(Dest);
     {$IFDEF Store16bits}
     {Copy extra pixel values}
-    PByte(Extra)^ := fOwner.GammaTable[pByte(Longint(Src) + 5)^]; inc(Extra);
-    PByte(Extra)^ := fOwner.GammaTable[pByte(Longint(Src) + 3)^]; inc(Extra);
-    PByte(Extra)^ := fOwner.GammaTable[pByte(Longint(Src) + 1)^]; inc(Extra);
+    Extra^ := fOwner.GammaTable[pByte(Src + 5)^]; inc(Extra);
+    Extra^ := fOwner.GammaTable[pByte(Src + 3)^]; inc(Extra);
+    Extra^ := fOwner.GammaTable[pByte(Src + 1)^]; inc(Extra);
     {$ENDIF}
     {Move to next pixel}
     inc(Src, 8); inc(Trans);
@@ -3115,7 +3176,7 @@ begin
   begin
     {Copy alpha value and then gray value}
     {$IFDEF Store16bits}
-    Extra^ := pByte(Longint(Src) + 1)^; inc(Extra);
+    Extra^ := pByte(Src + 1)^; inc(Extra);
     {$ENDIF}
     Dest^  := Src^;  inc(Src, 2);
     Trans^ := Src^;  inc(Src, 2);
@@ -3166,12 +3227,10 @@ begin
   end;
 
   {Get the image data pointer}
-  Longint(Data) := Longint(Header.ImageData) +
-    Header.BytesPerRow * (ImageHeight - 1);
+  Data := PByte(Header.ImageData) + Header.BytesPerRow * (ImageHeight - 1);
   Trans := Header.ImageAlpha;
   {$IFDEF Store16bits}
-  Longint(Extra) := Longint(Header.ExtraImageData) +
-    Header.BytesPerRow * (ImageHeight - 1);
+  Extra := PByte(Header.ExtraImageData) + Header.BytesPerRow * (ImageHeight - 1);
   {$ENDIF}
   {Reads each line}
   FOR j := 0 to ImageHeight - 1 do
@@ -3446,15 +3505,15 @@ begin
     while deflate(ZLIB,Z_FINISH) <> Z_STREAM_END do
     begin
       {Writes this IDAT chunk}
-      WriteIDAT(fStream, Data, Owner.MaxIdatSize - avail_out);
+      WriteIDAT(fStream, Data, Cardinal(Owner.MaxIdatSize) - Cardinal(avail_out));
       {Re-update buffer}
       next_out := Data;
       avail_out := Owner.MaxIdatSize;
     end;
 
-    if avail_out < Owner.MaxIdatSize then
+    if Cardinal(avail_out) < Cardinal(Owner.MaxIdatSize) then
       {Writes final IDAT}
-      WriteIDAT(fStream, Data, Owner.MaxIdatSize - avail_out);
+      WriteIDAT(fStream, Data, Cardinal(Owner.MaxIdatSize) - Cardinal(avail_out));
 
   end {with ZLIBStream, ZLIBStream.ZLIB};
 end;
@@ -3467,9 +3526,9 @@ begin
   FOR I := 1 TO ImageWidth DO
   begin
     {Copy pixel values}
-    PByte(Dest)^ := fOwner.InverseGamma[pByte(Longint(Src) + 2)^]; inc(Dest);
-    PByte(Dest)^ := fOwner.InverseGamma[pByte(Longint(Src) + 1)^]; inc(Dest);
-    PByte(Dest)^ := fOwner.InverseGamma[pByte(Longint(Src)    )^]; inc(Dest);
+    Dest^ := fOwner.InverseGamma[pByte(Src + 2)^]; inc(Dest);
+    Dest^ := fOwner.InverseGamma[pByte(Src + 1)^]; inc(Dest);
+    Dest^ := fOwner.InverseGamma[pByte(Src    )^]; inc(Dest);
     {Move to next pixel}
     inc(Src, 3);
   end {for I}
@@ -3485,9 +3544,9 @@ begin
     //Now we copy from 1 byte for each sample stored to a 2 bytes (or 1 word)
     //for sample
     {Copy pixel values}
-    pWORD(Dest)^ := fOwner.InverseGamma[pByte(Longint(Src) + 2)^]; inc(Dest, 2);
-    pWORD(Dest)^ := fOwner.InverseGamma[pByte(Longint(Src) + 1)^]; inc(Dest, 2);
-    pWORD(Dest)^ := fOwner.InverseGamma[pByte(Longint(Src)    )^]; inc(Dest, 2);
+    pWORD(Dest)^ := fOwner.InverseGamma[pByte(Src + 2)^]; inc(Dest, 2);
+    pWORD(Dest)^ := fOwner.InverseGamma[pByte(Src + 1)^]; inc(Dest, 2);
+    pWORD(Dest)^ := fOwner.InverseGamma[pByte(Src    )^]; inc(Dest, 2);
     {Move to next pixel}
     inc(Src, 3);
   end {for I}
@@ -3510,7 +3569,7 @@ begin
   begin
     //Now we copy from 1 byte for each sample stored to a 2 bytes (or 1 word)
     //for sample
-    pWORD(Dest)^ := pByte(Longint(Src))^; inc(Dest, 2);
+    pWORD(Dest)^ := pByte(Src)^; inc(Dest, 2);
     {Move to next pixel}
     inc(Src);
   end {for I}
@@ -3524,9 +3583,9 @@ begin
   {Copy the data to the destination, including data from Trans pointer}
   FOR i := 1 TO ImageWidth do
   begin
-    PByte(Dest)^ := Owner.InverseGamma[PByte(Longint(Src) + 2)^]; inc(Dest);
-    PByte(Dest)^ := Owner.InverseGamma[PByte(Longint(Src) + 1)^]; inc(Dest);
-    PByte(Dest)^ := Owner.InverseGamma[PByte(Longint(Src)    )^]; inc(Dest);
+    Dest^ := Owner.InverseGamma[PByte(Src + 2)^]; inc(Dest);
+    Dest^ := Owner.InverseGamma[PByte(Src + 1)^]; inc(Dest);
+    Dest^ := Owner.InverseGamma[PByte(Src    )^]; inc(Dest);
     Dest^ := Trans^; inc(Dest);
     inc(Src, 3); inc(Trans);
   end {for i};
@@ -3540,10 +3599,10 @@ begin
   {Copy the data to the destination, including data from Trans pointer}
   FOR i := 1 TO ImageWidth do
   begin
-    pWord(Dest)^ := Owner.InverseGamma[PByte(Longint(Src) + 2)^]; inc(Dest, 2);
-    pWord(Dest)^ := Owner.InverseGamma[PByte(Longint(Src) + 1)^]; inc(Dest, 2);
-    pWord(Dest)^ := Owner.InverseGamma[PByte(Longint(Src)    )^]; inc(Dest, 2);
-    pWord(Dest)^ := PByte(Longint(Trans)  )^; inc(Dest, 2);
+    pWord(Dest)^ := Owner.InverseGamma[PByte(Src + 2)^]; inc(Dest, 2);
+    pWord(Dest)^ := Owner.InverseGamma[PByte(Src + 1)^]; inc(Dest, 2);
+    pWord(Dest)^ := Owner.InverseGamma[PByte(Src    )^]; inc(Dest, 2);
+    pWord(Dest)^ := Trans^; inc(Dest, 2);
     inc(Src, 3); inc(Trans);
   end {for i};
 end;
@@ -3622,8 +3681,7 @@ begin
   end {case Header.ColorType};
 
   {Get the image data pointer}
-  Longint(Data) := Longint(Header.ImageData) +
-    Header.BytesPerRow * (ImageHeight - 1);
+  Data := PByte(Header.ImageData) + Header.BytesPerRow * (ImageHeight - 1);
   Trans := Header.ImageAlpha;
 
   {Writes each line}
@@ -3656,12 +3714,12 @@ var
 begin
   {Get first column and enter in loop}
   Col := ColumnStart[Pass];
-  Src := pByte(Longint(Src) + Col * 3);
+  Src := Src + Col * 3;
   repeat
     {Copy this row}
-    PByte(Dest)^ := fOwner.InverseGamma[pByte(Longint(Src) + 2)^]; inc(Dest);
-    PByte(Dest)^ := fOwner.InverseGamma[pByte(Longint(Src) + 1)^]; inc(Dest);
-    PByte(Dest)^ := fOwner.InverseGamma[pByte(Longint(Src)    )^]; inc(Dest);
+    Dest^ := fOwner.InverseGamma[pByte(Src + 2)^]; inc(Dest);
+    Dest^ := fOwner.InverseGamma[pByte(Src + 1)^]; inc(Dest);
+    Dest^ := fOwner.InverseGamma[pByte(Src    )^]; inc(Dest);
 
     {Move to next column}
     inc(Src, ColumnIncrement[Pass] * 3);
@@ -3677,12 +3735,12 @@ var
 begin
   {Get first column and enter in loop}
   Col := ColumnStart[Pass];
-  Src := pByte(Longint(Src) + Col * 3);
+  Src := Src + Col * 3;
   repeat
     {Copy this row}
-    pWord(Dest)^ := Owner.InverseGamma[pByte(Longint(Src) + 2)^]; inc(Dest, 2);
-    pWord(Dest)^ := Owner.InverseGamma[pByte(Longint(Src) + 1)^]; inc(Dest, 2);
-    pWord(Dest)^ := Owner.InverseGamma[pByte(Longint(Src)    )^]; inc(Dest, 2);
+    pWord(Dest)^ := Owner.InverseGamma[pByte(Src + 2)^]; inc(Dest, 2);
+    pWord(Dest)^ := Owner.InverseGamma[pByte(Src + 1)^]; inc(Dest, 2);
+    pWord(Dest)^ := Owner.InverseGamma[pByte(Src    )^]; inc(Dest, 2);
 
     {Move to next column}
     inc(Src, ColumnIncrement[Pass] * 3);
@@ -3711,9 +3769,9 @@ begin
       CurBit := StartBit[biBitCount];
       repeat
         {Adjust pointer to pixel byte bounds}
-        Src2 := pByte(Longint(Src) + (biBitCount * Col) div 8);
+        Src2 := Src + (biBitCount * Col) div 8;
         {Copy data}
-        PByte(Dest)^ := Byte(Dest^) or
+        Dest^ := Byte(Dest^) or
           (((Byte(Src2^) shr (StartBit[Header.BitDepth] - (biBitCount * Col)
             mod 8))) and (BitTable[biBitCount])) shl CurBit;
 
@@ -3736,7 +3794,7 @@ var
 begin
   {Get first column and enter in loop}
   Col := ColumnStart[Pass];
-  Src := pByte(Longint(Src) + Col);
+  Src := Src + Col;
   repeat
     {Copy this row}
     pWord(Dest)^ := Byte(Src^); inc(Dest, 2);
@@ -3756,13 +3814,13 @@ var
 begin
   {Get first column and enter in loop}
   Col := ColumnStart[Pass];
-  Src := pByte(Longint(Src) + Col * 3);
-  Trans := pByte(Longint(Trans) + Col);
+  Src := Src + Col * 3;
+  Trans := Trans + Col;
   repeat
     {Copy this row}
-    PByte(Dest)^ := Owner.InverseGamma[pByte(Longint(Src) + 2)^]; inc(Dest);
-    PByte(Dest)^ := Owner.InverseGamma[pByte(Longint(Src) + 1)^]; inc(Dest);
-    PByte(Dest)^ := Owner.InverseGamma[pByte(Longint(Src)    )^]; inc(Dest);
+    Dest^ := Owner.InverseGamma[pByte(Src + 2)^]; inc(Dest);
+    Dest^ := Owner.InverseGamma[pByte(Src + 1)^]; inc(Dest);
+    Dest^ := Owner.InverseGamma[pByte(Src    )^]; inc(Dest);
     Dest^ := Trans^; inc(Dest);
 
     {Move to next column}
@@ -3781,13 +3839,13 @@ var
 begin
   {Get first column and enter in loop}
   Col := ColumnStart[Pass];
-  Src := pByte(Longint(Src) + Col * 3);
-  Trans := pByte(Longint(Trans) + Col);
+  Src := Src + Col * 3;
+  Trans := Trans + Col;
   repeat
     {Copy this row}
-    pWord(Dest)^ := Owner.InverseGamma[pByte(Longint(Src) + 2)^]; inc(Dest, 2);
-    pWord(Dest)^ := Owner.InverseGamma[pByte(Longint(Src) + 1)^]; inc(Dest, 2);
-    pWord(Dest)^ := Owner.InverseGamma[pByte(Longint(Src)    )^]; inc(Dest, 2);
+    pWord(Dest)^ := Owner.InverseGamma[pByte(Src + 2)^]; inc(Dest, 2);
+    pWord(Dest)^ := Owner.InverseGamma[pByte(Src + 1)^]; inc(Dest, 2);
+    pWord(Dest)^ := Owner.InverseGamma[pByte(Src    )^]; inc(Dest, 2);
     pWord(Dest)^ := pByte(Trans)^; inc(Dest, 2);
 
     {Move to next column}
@@ -3806,8 +3864,8 @@ var
 begin
   {Get first column and enter in loop}
   Col := ColumnStart[Pass];
-  Src := pByte(Longint(Src) + Col);
-  Trans := pByte(Longint(Trans) + Col);
+  Src := Src + Col;
+  Trans := Trans + Col;
   repeat
     {Copy this row}
     Dest^ := Src^;   inc(Dest);
@@ -3829,12 +3887,12 @@ var
 begin
   {Get first column and enter in loop}
   Col := ColumnStart[Pass];
-  Src := pByte(Longint(Src) + Col);
-  Trans := pByte(Longint(Trans) + Col);
+  Src := Src + Col;
+  Trans := Trans + Col;
   repeat
     {Copy this row}
-    pWord(Dest)^ := pByte(Src)^; inc(Dest, 2);
-    pWord(Dest)^ := pByte(Trans)^; inc(Dest, 2);
+    pWord(Dest)^ := Src^; inc(Dest, 2);
+    pWord(Dest)^ := Trans^; inc(Dest, 2);
 
     {Move to next column}
     inc(Src, ColumnIncrement[Pass]);
@@ -3897,9 +3955,9 @@ begin
     {Get current row index}
     CurrentRow := RowStart[CurrentPass];
     {Get a pointer to the current row image data}
-    Data := Ptr(Longint(Header.ImageData) + Header.BytesPerRow *
-      (ImageHeight - 1 - CurrentRow));
-    Trans := Ptr(Longint(Header.ImageAlpha) + ImageWidth * CurrentRow);
+    Data := PByte(Header.ImageData) + Header.BytesPerRow *
+      (ImageHeight - 1 - CurrentRow);
+    Trans := PByte(Header.ImageAlpha) + ImageWidth * CurrentRow;
 
     {Process all the image rows}
     if Row_Bytes > 0 then
@@ -4228,10 +4286,10 @@ begin
     ClearChunks
   {Assigns contents from another TPngImage}
   else if Source is TPngImage then
-    AssignPNG(Source as TPngImage)
+    AssignPNG(TPngImage(Source))
   {Copy contents from a TBitmap}
   {$IFDEF UseDelphi}else if Source is TBitmap then
-    with Source as TBitmap do
+    with TBitmap(Source) do
       AssignHandle(Handle, Transparent,
         ColorToRGB(TransparentColor)){$ENDIF}
   {Unknown source, let ancestor deal with it}
@@ -4274,7 +4332,7 @@ begin
   InitializeGamma;
   BeingCreated := True;
   Chunks.Add(TChunkIEND);
-  NewIHDR := Chunks.Add(TChunkIHDR) as TChunkIHDR;
+  NewIHDR := TChunkIHDR(Chunks.Add(TChunkIHDR));
   NewIHDR.IHDRData.ColorType := ColorType;
   NewIHDR.IHDRData.BitDepth := BitDepth;
   NewIHDR.IHDRData.Width := cx;
@@ -4467,32 +4525,35 @@ end;
 {Returns if it has the pixel information chunk}
 function TPngImage.HasPixelInformation: Boolean;
 begin
-  Result := (Chunks.ItemFromClass(TChunkpHYs) as tChunkpHYs) <> nil;
+  Result := Chunks.ItemFromClass(TChunkpHYs) <> nil;
 end;
 
 {Returns the pixel information chunk}
 function TPngImage.GetPixelInformation: TChunkpHYs;
 begin
-  Result := Chunks.ItemFromClass(TChunkpHYs) as tChunkpHYs;
+  Result := tChunkpHYs(Chunks.ItemFromClass(TChunkpHYs));
   if not Assigned(Result) then
   begin
-    Result := Chunks.Add(tChunkpHYs) as tChunkpHYs;
+    Result := tChunkpHYs(Chunks.Add(TChunkpHYs));
     Result.fUnit := utMeter;
   end;
 end;
 
 {Returns pointer to the chunk TChunkIHDR which should be the first}
 function TPngImage.GetHeader: TChunkIHDR;
+var
+  LItem: TChunk;
 begin
   {If there is a TChunkIHDR returns it, otherwise returns nil}
-  if (Chunks.Count <> 0) and (Chunks.Item[0] is TChunkIHDR) then
-    Result := Chunks.Item[0] as TChunkIHDR
-  else
+  if (Chunks.Count <> 0) then
   begin
-    {No header, throw error message}
-    RaiseError(EPNGHeaderNotPresent, EPNGHeaderNotPresentText);
-    Result := nil
-  end
+    LItem := Chunks.Item[0];
+    if LItem is TChunkIHDR then
+      Exit(TChunkIHDR(LItem));
+  end;
+  {No header, throw error message}
+  RaiseError(EPNGHeaderNotPresent, EPNGHeaderNotPresentText);
+  Result := nil;
 end;
 
 {Draws using partial transparency}
@@ -4548,7 +4609,6 @@ var
   PaletteChunk: TChunkPLTE;
   TransValue, PaletteIndex: Byte;
   CurBit: Integer;
-  Data: PByte;
 
   {Buffer bitmap modification}
   BytesPerRowDest,
@@ -4612,7 +4672,7 @@ begin
   {Obtains image pointers}
   ImageData := BufferBits;
   AlphaSource := Header.ImageAlpha;
-  Longint(ImageSource) := Longint(Header.ImageData) +
+  PByte(ImageSource) := PByte(Header.ImageData) +
     Header.BytesPerRow * Longint(Header.Height - 1);
   ImageSourceOrg := ImageSource;
 
@@ -4646,15 +4706,14 @@ begin
           end;
 
         {Move pointers}
-        inc(Longint(ImageData), BytesPerRowDest);
+        inc(PByte(ImageData), BytesPerRowDest);
         if Stretch then j2 := trunc(j / FactorY) else j2 := j;
-        Longint(ImageSource) := Longint(ImageSourceOrg) - BytesPerRowSrc * j2;
-        Longint(AlphaSource) := Longint(Header.ImageAlpha) +
-          BytesPerRowAlpha * j2;
+        PByte(ImageSource) := PByte(ImageSourceOrg) - BytesPerRowSrc * j2;
+        PByte(AlphaSource) := PByte(Header.ImageAlpha) + BytesPerRowAlpha * j2;
       end;
     {Palette images with 1 byte for each pixel}
     1,4,8: if Header.ColorType = COLOR_GRAYSCALEALPHA then
-
+                                         
       FOR j := 1 TO H DO
       begin
         {Process all the pixels in this line}
@@ -4690,15 +4749,14 @@ begin
           end;
 
         {Move pointers}
-        Longint(ImageData) := Longint(ImageData) + BytesPerRowDest;
+        PByte(ImageData) := PByte(ImageData) + BytesPerRowDest;
         if Stretch then j2 := trunc(j / FactorY) else j2 := j;
-        Longint(ImageSource) := Longint(ImageSourceOrg) - BytesPerRowSrc * j2;
-        Longint(AlphaSource) := Longint(Header.ImageAlpha) +
-          BytesPerRowAlpha * j2;
+        PByte(ImageSource) := PByte(ImageSourceOrg) - BytesPerRowSrc * j2;
+        PByte(AlphaSource) := PByte(Header.ImageAlpha) + BytesPerRowAlpha * j2;
       end
     else {Palette images}
     begin
-
+                                           
       {Obtain pointer to the transparency chunk}
       TransparencyChunk := TChunktRNS(Chunks.ItemFromClass(TChunktRNS));
       PaletteChunk := TChunkPLTE(Chunks.ItemFromClass(TChunkPLTE));
@@ -4743,9 +4801,9 @@ begin
         end;
 
         {Move pointers}
-        Longint(ImageData) := Longint(ImageData) + BytesPerRowDest;
+        PByte(ImageData) := PByte(ImageData) + BytesPerRowDest;
         if Stretch then j2 := trunc(j / FactorY) else j2 := j;
-        Longint(ImageSource) := Longint(ImageSourceOrg) - BytesPerRowSrc * j2;
+        PByte(ImageSource) := PByte(ImageSourceOrg) - BytesPerRowSrc * j2;
       end
     end {Palette images}
   end {case Header.BitmapInfo.bmiHeader.biBitCount};
@@ -4757,363 +4815,6 @@ begin
   SelectObject(BufferDC, OldBitmap);
   DeleteObject(BufferBitmap);
   DeleteDC(BufferDC);
-end;
-
-procedure TPngImage.DrawPngLayerialTransEx(DC: HDC; Srect, Rect: TRect);
-  {Adjust the rectangle structure}
-  procedure AdjustRect(var Rect: TRect);
-  var
-    t: Integer;
-  begin
-    if Rect.Right < Rect.Left then
-    begin
-      t := Rect.Right;
-      Rect.Right := Rect.Left;
-      Rect.Left := t;
-    end;
-    if Rect.Bottom < Rect.Top then
-    begin
-      t := Rect.Bottom;
-      Rect.Bottom := Rect.Top;
-      Rect.Top := t;
-    end
-  end;
-
-type
-  {Access to pixels}
-  TPixelLine = Array[Word] of TRGBQuad;
-  pPixelLine = ^TPixelLine;
-const
-  {Structure used to create the bitmap}
-  BitmapInfoHeader: TBitmapInfoHeader =
-    (biSize: sizeof(TBitmapInfoHeader);
-     biWidth: 100;
-     biHeight: 100;
-     biPlanes: 1;
-     biBitCount: 32;
-     biCompression: BI_RGB;
-     biSizeImage: 0;
-     biXPelsPerMeter: 0;
-     biYPelsPerMeter: 0;
-     biClrUsed: 0;
-     biClrImportant: 0);
-var
-  {Buffer bitmap creation}
-  BitmapInfo  : TBitmapInfo;
-  BufferDC    : HDC;
-  BufferBits  : Pointer;
-  OldBitmap,
-  BufferBitmap: HBitmap;
-  Header: TChunkIHDR;
-
-  {Transparency/palette chunks}
-  TransparencyChunk: TChunktRNS;
-  PaletteChunk: TChunkPLTE;
-  TransValue, PaletteIndex: Byte;
-  CurBit: Integer;
-  Data: PByte;
-
-  {Buffer bitmap modification}
-  BytesPerRowDest,
-  BytesPerRowSrc,
-  BytesPerRowAlpha: Integer;
-  ImageSource, ImageSourceOrg,
-  AlphaSource     : pByteArray;
-  ImageData       : pPixelLine;
-  i, j, i2, j2    : Integer;
-
-  {For bitmap stretching}
-  W, H            : Cardinal;
-  Stretch         : Boolean;
-  FactorX, FactorY: Double;
-
-  Sw,SH: Cardinal;
-begin
-  {Prepares the rectangle structure to stretch draw}
-  if (Rect.Right = Rect.Left) or (Rect.Bottom = Rect.Top) then exit;
-  AdjustRect(Rect);
-  {Gets the width and height}
-  W := Rect.Right - Rect.Left;
-  H := Rect.Bottom - Rect.Top;
-  Header := Self.Header; {Fast access to header}
-  Sw := Srect.Right - Srect.Left;
-  Sh := Srect.Bottom - Srect.Top;
-  Stretch := (w <> Sw) or (H <> Sh);
-  if Stretch then FactorX := W / Sw else FactorX := 1;
-  if Stretch then FactorY := H / Sh else FactorY := 1;
-
-  {Prepare to create the bitmap}
-  Fillchar(BitmapInfo, sizeof(BitmapInfo), #0);
-  BitmapInfoHeader.biWidth := W;
-  BitmapInfoHeader.biHeight := -Integer(H);
-  BitmapInfo.bmiHeader := BitmapInfoHeader;
-
-  {Create the bitmap which will receive the background, the applied}
-  {alpha blending and then will be painted on the background}
-  BufferDC := CreateCompatibleDC(0);
-  {In case BufferDC could not be created}
-  if (BufferDC = 0) then RaiseError(EPNGOutMemory, EPNGOutMemoryText);
-  BufferBitmap := CreateDIBSection(BufferDC, BitmapInfo, DIB_RGB_COLORS,
-    BufferBits, 0, 0);
-  {In case buffer bitmap could not be created}
-  if (BufferBitmap = 0) or (BufferBits = Nil) then
-  begin
-    if BufferBitmap <> 0 then DeleteObject(BufferBitmap);
-    DeleteDC(BufferDC);
-    RaiseError(EPNGOutMemory, EPNGOutMemoryText);
-  end;
-
-  {Selects new bitmap and release old bitmap}
-  OldBitmap := SelectObject(BufferDC, BufferBitmap);
-
-  {Draws the background on the buffer image}
-  BitBlt(BufferDC, 0, 0, W, H, DC, Rect.Left, Rect.Top, SRCCOPY);
-
-  {Obtain number of bytes for each row}
-  BytesPerRowAlpha := Header.Width;
-  BytesPerRowDest := (((BitmapInfo.bmiHeader.biBitCount * W) + 31)
-    and not 31) div 8; {Number of bytes for each image row in destination}
-  BytesPerRowSrc := (((Header.BitmapInfo.bmiHeader.biBitCount * Header.Width) +
-    31) and not 31) div 8; {Number of bytes for each image row in source}
-
-  {Obtains image pointers}
-  ImageData := BufferBits;
-  //AlphaSource := Header.ImageAlpha;
-  Longint(ImageSource) := Longint(Header.ImageData) +
-    Header.BytesPerRow * Longint(Header.Height - 1);
-  ImageSourceOrg := ImageSource;
-
-  case Header.BitmapInfo.bmiHeader.biBitCount of
-    {R, G, B images}
-    24:
-    begin
-      j2 := Srect.Top; //先多出来的一次
-      Longint(ImageSource) := Longint(ImageSourceOrg) - BytesPerRowSrc * j2;
-      Longint(AlphaSource) := Longint(Header.ImageAlpha) +
-        BytesPerRowAlpha * j2;
-      FOR j := 1 TO H DO
-      begin
-        {Process all the pixels in this line}
-        FOR i := 0 TO W - 1 DO
-        begin
-          if Stretch then i2 := Srect.Left + trunc(i / FactorX) else i2 := Srect.Left + i;
-          if (AlphaSource[i2] <> 0) then
-            if (AlphaSource[i2] = 255) then
-            begin
-              pRGBTriple(@ImageData[i])^ := pRGBTriple(@ImageSource[i2 * 3])^;
-              ImageData[i].rgbReserved := 255;
-            end
-            else
-              with ImageData[i] do
-              begin
-                rgbRed := ($7F + ImageSource[2+i2*3] * AlphaSource[i2] + rgbRed *
-                  (not AlphaSource[i2])) div $FF;
-                rgbGreen := ($7F + ImageSource[1+i2*3] * AlphaSource[i2] +
-                  rgbGreen * (not AlphaSource[i2])) div $FF;
-                rgbBlue := ($7F + ImageSource[i2*3] * AlphaSource[i2] + rgbBlue *
-                 (not AlphaSource[i2])) div $FF;
-                rgbReserved := not (($7F + (not rgbReserved) * (not AlphaSource[i2])) div $FF);
-              end;
-        end;
-
-        {Move pointers}
-        inc(Longint(ImageData), BytesPerRowDest);
-        if Stretch then j2 := Srect.Top + trunc(j / FactorY) else  j2 := Srect.Top + j;
-        Longint(ImageSource) := Longint(ImageSourceOrg) - BytesPerRowSrc * j2;
-        Longint(AlphaSource) := Longint(Header.ImageAlpha) +
-          BytesPerRowAlpha * j2;
-      end;
-    end;
-    {Palette images with 1 byte for each pixel}
-    1,4,8: if Header.ColorType = COLOR_GRAYSCALEALPHA then
-    begin
-      j2 := Srect.Top;
-      Longint(ImageSource) := Longint(ImageSourceOrg) - BytesPerRowSrc * j2;
-      Longint(AlphaSource) := Longint(Header.ImageAlpha) + BytesPerRowAlpha * j2;
-      FOR j := 1 TO H DO
-      begin
-        {Process all the pixels in this line}
-        FOR i := 0 TO W - 1 DO
-        begin
-            if Stretch then i2 := Srect.Left + trunc(i / FactorX) else i2 := Srect.Left + i;
-            {Obtains the palette index}
-            case Header.BitDepth of
-              1:
-              begin
-                CurBit := i2 mod 8;
-                i2 := i2 div 8;
-                PaletteIndex := ((ImageSource[i2] shr (7-(CurBit Mod 8))) and 1) * $FF;
-              end;
-              2,4:
-              begin
-                CurBit := i2 mod 4;
-                i2 := i2 div 2;
-                PaletteIndex := ((ImageSource[i2] shr ((1-(CurBit Mod 2))*4)) and $0F)  * $11;
-              end;
-              else
-                PaletteIndex := ImageSource[i2];
-            end;
-            with ImageData[i], Header.BitmapInfo do begin
-              rgbRed := ($7F + PaletteIndex * AlphaSource[i2] +
-                rgbRed * (not AlphaSource[i2])) div $FF;
-              rgbGreen := ($7F + PaletteIndex * AlphaSource[i2] +
-                rgbGreen * (not AlphaSource[i2])) div $FF;
-              rgbBlue := ($7F + PaletteIndex * AlphaSource[i2] +
-                rgbBlue * (not AlphaSource[i2])) div $FF;
-              rgbReserved := not (($7F + (not rgbReserved) * (not AlphaSource[i2])) div $FF);
-            end;
-          end;
-
-          {Move pointers}
-          Longint(ImageData) := Longint(ImageData) + BytesPerRowDest;
-          if Stretch then j2 := Srect.Top + trunc(j / FactorY) else j2 := Srect.Top +  j;
-          Longint(ImageSource) := Longint(ImageSourceOrg) - BytesPerRowSrc * j2;
-          Longint(AlphaSource) := Longint(Header.ImageAlpha) +
-          BytesPerRowAlpha * j2;
-        end
-	end
-    else {Palette images}
-    begin
-
-      {Obtain pointer to the transparency chunk}
-      TransparencyChunk := TChunktRNS(Chunks.ItemFromClass(TChunktRNS));
-      PaletteChunk := TChunkPLTE(Chunks.ItemFromClass(TChunkPLTE));
-
-      j2 :=Srect.Top;
-      Longint(ImageSource) := Longint(ImageSourceOrg) - BytesPerRowSrc * j2;
-
-      FOR j := 1 TO H DO
-      begin
-        {Process all the pixels in this line}
-        for i := 0 to W - 1 do
-        begin
-          CurBit := 0;
-          if Stretch then i2 := Srect.Left + trunc(i / FactorX) else i2 := Srect.Left + i;
-
-          {Obtains the palette index}
-          case Header.BitDepth of
-            1:
-            begin
-              CurBit := i2 mod 8;
-              i2 := i2 div 8;
-              PaletteIndex := (ImageSource[i2] shr (7-(CurBit Mod 8))) and 1;
-            end;
-            2,4:
-            begin
-              CurBit := i2 mod 4;
-              i2 := i2 div 2;
-              PaletteIndex := (ImageSource[i2] shr ((1-(CurBit Mod 2))*4)) and $0F;
-            end;
-            else
-              PaletteIndex := ImageSource[i2];
-          end;
-
-          {Updates the image with the new pixel}
-          with ImageData[i] do
-          begin
-            TransValue := TransparencyChunk.PaletteValues[PaletteIndex];
-            rgbRed := (255 + PaletteChunk.Item[PaletteIndex].rgbRed *
-               TransValue + rgbRed * (255 - TransValue)) shr 8;
-            rgbGreen := (255 + PaletteChunk.Item[PaletteIndex].rgbGreen *
-               TransValue + rgbGreen * (255 - TransValue)) shr 8;
-            rgbBlue := (255 + PaletteChunk.Item[PaletteIndex].rgbBlue *
-               TransValue + rgbBlue * (255 - TransValue)) shr 8;
-          end;
-
-        end;
-
-        {Move pointers}
-        Longint(ImageData) := Longint(ImageData) + BytesPerRowDest;
-        if Stretch then j2 := trunc(j / FactorY) else j2 := j;
-        Longint(ImageSource) := Longint(ImageSourceOrg) - BytesPerRowSrc * j2;
-      end
-    end {Palette images}
-  end {case Header.BitmapInfo.bmiHeader.biBitCount};
-
-  {Draws the new bitmap on the foreground}
-  BitBlt(DC, Rect.Left, Rect.Top, W, H, BufferDC, 0, 0, SRCCOPY);
-
-  {Free bitmap}
-  SelectObject(BufferDC, OldBitmap);
-  DeleteObject(BufferBitmap);
-  DeleteDC(BufferDC);
-end;
-
-procedure TPngImage.DrawToDC(DC: HDC; const Rect: TRect);
-var
-  Header: TChunkIHDR;
-begin
-  {Quit in case there is no header, otherwise obtain it}
-  if Empty then Exit;
-  Header := Chunks.GetItem(0) as TChunkIHDR;
-
-  {Copy the data to the canvas}
-  case Self.TransparencyMode of
-  {$IFDEF PartialTransparentDraw}
-    ptmPartial:
-      DrawPartialTrans(DC, Rect);
-  {$ENDIF}
-    ptmBit: DrawTransparentBitmap(DC,
-      Header.ImageData, Header.BitmapInfo.bmiHeader,
-      pBitmapInfo(@Header.BitmapInfo), Rect,
-      {$IFDEF UseDelphi}ColorToRGB({$ENDIF}TransparentColor)
-      {$IFDEF UseDelphi}){$ENDIF}
-    else
-    begin
-      SetStretchBltMode(DC, COLORONCOLOR);
-      StretchDiBits(DC, Rect.Left,
-        Rect.Top, Rect.Right - Rect.Left, Rect.Bottom - Rect.Top, 0, 0,
-        Header.Width, Header.Height, Header.ImageData,
-        pBitmapInfo(@Header.BitmapInfo)^, DIB_RGB_COLORS, SRCCOPY)
-    end
-  end {case}
-end;
-
-procedure TPngImage.DrawToDest(Dc: HDC; const SelfRect, DestRect: TRect);
-var
-  Header: TChunkIHDR;
-begin
-  if Empty then Exit;
-  Header := Chunks.Item[0] as TChunkIHDR;
-  case Self.TransparencyMode of
-    ptmPartial:
-      DrawPngLayerialTransEx(Dc, SelfRect,DestRect);
-    ptmBit: DrawTransparentBitmap(Dc,
-      Header.ImageData, Header.BitmapInfo.bmiHeader,
-      pBitmapInfo(@Header.BitmapInfo), DestRect, ColorToRGB(TransparentColor))
-    else
-    begin
-      SetStretchBltMode(Dc, COLORONCOLOR);
-      StretchDiBits(Dc, DestRect.Left,
-        DestRect.Top, DestRect.Right - DestRect.Left, DestRect.Bottom - DestRect.Top, 0, 0,
-        Header.Width, Header.Height, Header.ImageData,
-        pBitmapInfo(@Header.BitmapInfo)^, DIB_RGB_COLORS, SRCCOPY)
-    end
-  end;
-end;
-
-procedure TPngImage.DrawToDest(ACanvas: TCanvas; const SelfRect,
-  DestRect: TRect);
-var
-  Header: TChunkIHDR;
-begin
-  if Empty then Exit;
-  Header := Chunks.Item[0] as TChunkIHDR;
-  case Self.TransparencyMode of
-    ptmPartial:
-      DrawPngLayerialTransEx(ACanvas.Handle, SelfRect,DestRect);
-    ptmBit: DrawTransparentBitmap(ACanvas.Handle,
-      Header.ImageData, Header.BitmapInfo.bmiHeader,
-      pBitmapInfo(@Header.BitmapInfo), DestRect, ColorToRGB(TransparentColor))
-    else
-    begin
-      SetStretchBltMode(ACanvas.Handle, COLORONCOLOR);
-      StretchDiBits(ACanvas.Handle, DestRect.Left,
-        DestRect.Top, DestRect.Right - DestRect.Left, DestRect.Bottom - DestRect.Top, 0, 0,
-        Header.Width, Header.Height, Header.ImageData,
-        pBitmapInfo(@Header.BitmapInfo)^, DIB_RGB_COLORS, SRCCOPY)
-    end
-  end;
 end;
 
 {Draws the image into a canvas}
@@ -5213,11 +4914,10 @@ begin
     if (HasIDAT and (ChunkName = 'IDAT')) or (ChunkName = 'cHRM') then
     begin
       dec(ChunkCount);
-      Stream.Seek(ChunkLength + 4, soFromCurrent);
+      Stream.Seek(ChunkLength + 4, soCurrent);
       Continue;
     end;
-    {Tell it has an IDAT chunk}
-    if ChunkName = 'IDAT' then HasIDAT := TRUE;
+    {Tell it has an IDAT chunk}    if ChunkName = 'IDAT' then HasIDAT := TRUE;
 
     {Creates object for this chunk}
     Chunks.SetItem(ChunkCount - 1, CreateClassChunk(Self, ChunkName));
@@ -5347,7 +5047,7 @@ var
   ResStream: TResourceStream;
 begin
   {Creates an especial stream to load from the resource}
-  try ResStream := TResourceStream.Create(Instance, Name, 'PNG');//RT_RCDATA);
+  try ResStream := TResourceStream.Create(Instance, Name,'PNG');// RT_RCDATA);
   except RaiseError(EPNGCouldNotLoadResource, EPNGCouldNotLoadResourceText);
   exit; end;
 
@@ -5361,8 +5061,20 @@ end;
 
 {Loads the png from a resource ID}
 procedure TPngImage.LoadFromResourceID(Instance: HInst; ResID: Integer);
+var
+  ResStream: TResourceStream;
 begin
-  LoadFromResourceName(Instance, String(ResID));
+  {Creates an especial stream to load from the resource}
+  try ResStream := TResourceStream.CreateFromID(Instance, ResID,'PNG');// RT_RCDATA);
+  except RaiseError(EPNGCouldNotLoadResource, EPNGCouldNotLoadResourceText);
+  exit; end;
+
+  {Loads the png image from the resource}
+  try
+    LoadFromStream(ResStream);
+  finally
+    ResStream.Free;
+  end;
 end;
 
 {Assigns this TPngImage to another object}
@@ -5423,7 +5135,7 @@ begin
 
     if (TransparencyMode = ptmBit) then
     begin
-      TRNS := Chunks.ItemFromClass(TChunkTRNS) as TChunkTRNS;
+      TRNS := TChunkTRNS(Chunks.ItemFromClass(TChunkTRNS));
       TBitmap(Dest).TransparentColor := TRNS.TransparentColor;
       TBitmap(Dest).Transparent := True;
       SetStretchBltMode(TBitmap(Dest).Canvas.Handle, COLORONCOLOR);
@@ -5533,7 +5245,7 @@ function TPngImage.GetAlphaScanline(const LineIndex: Integer): pByteArray;
 begin
   with Header do
     if (ColorType = COLOR_RGBALPHA) or (ColorType = COLOR_GRAYSCALEALPHA) then
-      Longint(Result) := Longint(ImageAlpha) + (LineIndex * Longint(Width))
+      PByte(Result) := PByte(ImageAlpha) + (Cardinal(LineIndex) * Width)
     else Result := nil;  {In case the image does not use alpha information}
 end;
 
@@ -5542,8 +5254,8 @@ end;
 function TPngImage.GetExtraScanline(const LineIndex: Integer): Pointer;
 begin
   with Header do
-    Longint(Result) := (Longint(ExtraImageData) + ((Longint(Height) - 1) *
-      BytesPerRow)) - (LineIndex * BytesPerRow);
+    PByte(Result) := (PByte(ExtraImageData) + ((Height - 1) *
+      Cardinal(BytesPerRow))) - (LineIndex * BytesPerRow);
 end;
 {$ENDIF}
 
@@ -5551,8 +5263,8 @@ end;
 function TPngImage.GetScanline(const LineIndex: Integer): Pointer;
 begin
   with Header do
-    Longint(Result) := (Longint(ImageData) + ((Longint(Height) - 1) *
-      BytesPerRow)) - (LineIndex * BytesPerRow);
+    PByte(Result) := (PByte(ImageData) + ((Height - 1) *
+      Cardinal(BytesPerRow))) - (LineIndex * BytesPerRow);
 end;
 
 function TPngImage.GetSupportsPartialTransparency: Boolean;
@@ -5582,7 +5294,7 @@ begin
   begin
     Result := ptmNone; {Default result}
     {Gets the TRNS chunk pointer}
-    TRNS := Chunks.ItemFromClass(TChunkTRNS) as TChunkTRNS;
+    TRNS := TChunkTRNS(Chunks.ItemFromClass(TChunkTRNS));
 
     {Test depending on the color type}
     case ColorType of
@@ -5606,7 +5318,7 @@ procedure TPngImage.AddtEXt(const Keyword, Text: AnsiString);
 var
   TextChunk: TChunkTEXT;
 begin
-  TextChunk := Chunks.Add(TChunkText) as TChunkTEXT;
+  TextChunk := TChunkTEXT(Chunks.Add(TChunkTEXT));
   TextChunk.Keyword := Keyword;
   TextChunk.Text := Text;
 end;
@@ -5616,7 +5328,7 @@ procedure TPngImage.AddzTXt(const Keyword, Text: AnsiString);
 var
   TextChunk: TChunkzTXt;
 begin
-  TextChunk := Chunks.Add(TChunkzTXt) as TChunkzTXt;
+  TextChunk := TChunkzTXt(Chunks.Add(TChunkzTXt));
   TextChunk.Keyword := Keyword;
   TextChunk.Text := Text;
 end;
@@ -5632,7 +5344,7 @@ begin
       {Palette uses the TChunktRNS to store alpha}
       COLOR_PALETTE:
       begin
-       TRNS := Chunks.ItemFromClass(TChunkTRNS) as TChunkTRNS;
+       TRNS := TChunkTRNS(Chunks.ItemFromClass(TChunkTRNS));
        if TRNS <> nil then Chunks.RemoveChunk(TRNS)
       end;
       {Png allocates different memory space to hold alpha information}
@@ -5674,20 +5386,19 @@ begin
       COLOR_PALETTE:
       begin
         {Gets/creates TRNS chunk}
-        if Chunks.ItemFromClass(TChunkTRNS) = nil then
-          TRNS := Chunks.Add(TChunkTRNS) as TChunkTRNS
-        else
-          TRNS := Chunks.ItemFromClass(TChunkTRNS) as TChunkTRNS;
+        TRNS := TChunkTRNS(Chunks.ItemFromClass(TChunkTRNS));
+        if TRNS = nil then
+          TRNS := TChunkTRNS(Chunks.Add(TChunkTRNS));
 
-          {Prepares the TRNS chunk}
-          with TRNS do
-          begin
-            ResizeData(256);
-            Fillchar(PaletteValues[0], 256, 255);
-            fDataSize := 1 shl Header.BitDepth;
-            fBitTransparency := False
-          end {with Chunks.Add};
-        end;
+        {Prepares the TRNS chunk}
+        with TRNS do
+        begin
+          ResizeData(256);
+          Fillchar(PaletteValues[0], 256, 255);
+          fDataSize := 1 shl Header.BitDepth;
+          fBitTransparency := False
+        end {with Chunks.Add};
+      end;
     end {case Header.ColorType}
 
 end;
@@ -5697,7 +5408,7 @@ function TPngImage.GetTransparentColor: TColor;
 var
   TRNS: TChunkTRNS;
 begin
-  TRNS := Chunks.ItemFromClass(TChunkTRNS) as TChunkTRNS;
+  TRNS := TChunkTRNS(Chunks.ItemFromClass(TChunkTRNS));
   {Reads the transparency chunk to get this info}
   if Assigned(TRNS) then Result := TRNS.TransparentColor
     else Result := 0
@@ -5717,8 +5428,8 @@ begin
     {Allowed}
     COLOR_PALETTE, COLOR_RGB, COLOR_GRAYSCALE:
       begin
-        TRNS := Chunks.ItemFromClass(TChunkTRNS) as TChunkTRNS;
-        if not Assigned(TRNS) then TRNS := Chunks.Add(TChunkTRNS) as TChunkTRNS;
+        TRNS := TChunkTRNS(Chunks.ItemFromClass(TChunkTRNS));
+        if not Assigned(TRNS) then TRNS := TChunkTRNS(Chunks.Add(TChunkTRNS));
 
         {Sets the transparency value from TRNS chunk}
         TRNS.TransparentColor := {$IFDEF UseDelphi}ColorToRGB({$ENDIF}Value
@@ -5879,8 +5590,8 @@ begin
 
     {Copies the image data}
     for Line := 0 to Min(CY - 1, Height - 1) do
-      CopyMemory(Ptr(Longint(NewImageData) + (Longint(CY) - 1) *
-      NewBytesPerRow - (Line * NewBytesPerRow)), Scanline[Line],
+      CopyMemory(PByte(NewImageData) + (CY - 1) *
+        NewBytesPerRow - (Line * NewBytesPerRow), Scanline[Line],
       Min(NewBytesPerRow, Header.BytesPerRow));
 
     {Build array for alpha information, if necessary}
@@ -5890,8 +5601,8 @@ begin
       GetMem(NewImageAlpha, CX * CY);
       Fillchar(NewImageAlpha^, CX * CY, 255);
       for Line := 0 to Min(CY - 1, Height - 1) do
-        CopyMemory(Ptr(Longint(NewImageAlpha) + (Line * CX)),
-        AlphaScanline[Line], Min(CX, Width));
+        CopyMemory(PByte(NewImageAlpha) + (Line * CX),
+          AlphaScanline[Line], Min(CX, Width));
       FreeMem(Header.ImageAlpha);
       Header.ImageAlpha := NewImageAlpha;
     end;
@@ -5902,8 +5613,8 @@ begin
       GetMem(NewImageExtra, CX * CY);
       Fillchar(NewImageExtra^, CX * CY, 0);
       for Line := 0 to Min(CY - 1, Height - 1) do
-        CopyMemory(Ptr(Longint(NewImageExtra) + (Line * CX)),
-        ExtraScanline[Line], Min(CX, Width));
+        CopyMemory(PByte(NewImageExtra) + (Line * CX),
+          ExtraScanline[Line], Min(CX, Width));
       FreeMem(Header.ExtraImageData);
       Header.ExtraImageData := NewImageExtra;
     end;
@@ -5986,9 +5697,9 @@ begin
   if not Result or (Size <> 9) then exit; {Size must be 9}
 
   {Reads data}
-  fPPUnitX := ByteSwap(pCardinal(Longint(Data))^);
-  fPPUnitY := ByteSwap(pCardinal(Longint(Data) + 4)^);
-  fUnit := pUnitType(Longint(Data) + 8)^;
+  fPPUnitX := ByteSwap(pCardinal(PByte(Data))^);
+  fPPUnitY := ByteSwap(pCardinal(PByte(Data) + 4)^);
+  fUnit := pUnitType(PByte(Data) + 8)^;
 end;
 
 {Saves the chunk to a stream}
@@ -5997,8 +5708,8 @@ begin
   {Update data}
   ResizeData(9);  {Make sure the size is 9}
   pCardinal(Data)^ := ByteSwap(fPPUnitX);
-  pCardinal(Longint(Data) + 4)^ := ByteSwap(fPPUnitY);
-  pUnitType(Longint(Data) + 8)^ := fUnit;
+  pCardinal(PByte(Data) + 4)^ := ByteSwap(fPPUnitY);
+  pUnitType(PByte(Data) + 8)^ := fUnit;
 
   {Let inherited save data}
   Result := inherited SaveToStream(Stream);
@@ -6034,6 +5745,399 @@ begin
   Result := LibraryVersion
 end;
 
+{ TDxPngImage }
+
+procedure TDxPngImage.DrawPngLayerialTransEx(DC: HDC; Srect, Rect: TRect);
+{ Adjust the rectangle structure }
+  procedure AdjustRect(var Rect: TRect);
+  var
+    t: Integer;
+  begin
+    if Rect.Right < Rect.Left then
+    begin
+      t := Rect.Right;
+      Rect.Right := Rect.Left;
+      Rect.Left := t;
+    end;
+    if Rect.Bottom < Rect.Top then
+    begin
+      t := Rect.Bottom;
+      Rect.Bottom := Rect.Top;
+      Rect.Top := t;
+    end
+  end;
+
+type
+  { Access to pixels }
+  TPixelLine = Array [word] of TRGBQuad;
+  pPixelLine = ^TPixelLine;
+const
+  { Structure used to create the bitmap }
+  BitmapInfoHeader: TBitmapInfoHeader = (biSize: SIZEOF(TBitmapInfoHeader);
+    biWidth: 100; biHeight: 100; biPlanes: 1; biBitCount: 32;
+    biCompression: BI_RGB; biSizeImage: 0; biXPelsPerMeter: 0;
+    biYPelsPerMeter: 0; biClrUsed: 0; biClrImportant: 0);
+var
+  { Buffer bitmap creation }
+  BitmapInfo: TBitmapInfo;
+  BufferDC: HDC;
+  BufferBits: Pointer;
+  OldBitmap, BufferBitmap: HBitmap;
+  Header: TChunkIHDR;
+
+  { Transparency/palette chunks }
+  TransparencyChunk: TChunktRNS;
+  PaletteChunk: TChunkPLTE;
+  TransValue, PaletteIndex: Byte;
+  CurBit: Integer;
+
+  { Buffer bitmap modification }
+  BytesPerRowDest, BytesPerRowSrc, BytesPerRowAlpha: Integer;
+  ImageSource, ImageSourceOrg, AlphaSource: pByteArray;
+  ImageData: pPixelLine;
+  i, j, i2, j2: Integer;
+
+  { For bitmap stretching }
+  W, H: Cardinal;
+  Stretch: Boolean;
+  FactorX, FactorY: Double;
+
+  Sw, SH: Cardinal;
+begin
+  { Prepares the rectangle structure to stretch draw }
+  if (Rect.Right = Rect.Left) or (Rect.Bottom = Rect.Top) then
+    Exit;
+  AdjustRect(Rect);
+  { Gets the width and height }
+  W := Rect.Right - Rect.Left;
+  H := Rect.Bottom - Rect.Top;
+  Header := Self.Header; { Fast access to header }
+  Sw := Srect.Right - Srect.Left;
+  SH := Srect.Bottom - Srect.Top;
+  Stretch := (W <> Sw) or (H <> SH);
+  if Stretch then
+    FactorX := W / Sw
+  else
+    FactorX := 1;
+  if Stretch then
+    FactorY := H / SH
+  else
+    FactorY := 1;
+
+  { Prepare to create the bitmap }
+  Fillchar(BitmapInfo, SIZEOF(BitmapInfo), #0);
+  BitmapInfoHeader.biWidth := W;
+  BitmapInfoHeader.biHeight := -Integer(H);
+  BitmapInfo.bmiHeader := BitmapInfoHeader;
+
+  { Create the bitmap which will receive the background, the applied }
+  { alpha blending and then will be painted on the background }
+  BufferDC := CreateCompatibleDC(0);
+  { In case BufferDC could not be created }
+  if (BufferDC = 0) then
+    RaiseError(EPNGOutMemory, EPNGOutMemoryText);
+  BufferBitmap := CreateDIBSection(BufferDC, BitmapInfo, DIB_RGB_COLORS,
+    BufferBits, 0, 0);
+  { In case buffer bitmap could not be created }
+  if (BufferBitmap = 0) or (BufferBits = Nil) then
+  begin
+    if BufferBitmap <> 0 then
+      DeleteObject(BufferBitmap);
+    DeleteDC(BufferDC);
+    RaiseError(EPNGOutMemory, EPNGOutMemoryText);
+  end;
+
+  { Selects new bitmap and release old bitmap }
+  OldBitmap := SelectObject(BufferDC, BufferBitmap);
+
+  { Draws the background on the buffer image }
+  BitBlt(BufferDC, 0, 0, W, H, DC, Rect.Left, Rect.Top, SRCCOPY);
+
+  { Obtain number of bytes for each row }
+  BytesPerRowAlpha := Header.Width;
+  BytesPerRowDest := (((BitmapInfo.bmiHeader.biBitCount * W) + 31) and not 31)
+    div 8; { Number of bytes for each image row in destination }
+  BytesPerRowSrc := (((Header.BitmapInfo.bmiHeader.biBitCount * Header.Width)
+    + 31) and not 31) div 8; { Number of bytes for each image row in source }
+
+  { Obtains image pointers }
+  ImageData := BufferBits;
+  // AlphaSource := Header.ImageAlpha;
+  pByte(ImageSource) := pByte(Header.ImageData) + Header.BytesPerRow *
+    Longint(Header.Height - 1);
+  ImageSourceOrg := ImageSource;
+
+  case Header.BitmapInfo.bmiHeader.biBitCount of
+    { R, G, B images }
+    24:
+      begin
+        j2 := Srect.Top; // 先多出来的一次
+        pByte(ImageSource) := pByte(ImageSourceOrg) - BytesPerRowSrc * j2;
+        pByte(AlphaSource) := pByte(Header.ImageAlpha) +
+          BytesPerRowAlpha * j2;
+        FOR j := 1 TO H DO
+        begin
+          { Process all the pixels in this line }
+          FOR i := 0 TO W - 1 DO
+          begin
+            if Stretch then
+              i2 := Srect.Left + Trunc(i / FactorX)
+            else
+              i2 := Srect.Left + i;
+            if (AlphaSource[i2] <> 0) then
+              if (AlphaSource[i2] = 255) then
+              begin
+                pRGBTriple(@ImageData[i])^ :=
+                  pRGBTriple(@ImageSource[i2 * 3])^;
+                ImageData[i].rgbReserved := 255;
+              end
+              else
+                with ImageData[i] do
+                begin
+                  rgbRed := ($7F + ImageSource[2 + i2 * 3] * AlphaSource[i2] +
+                    rgbRed * (not AlphaSource[i2])) div $FF;
+                  rgbGreen := ($7F + ImageSource[1 + i2 * 3] * AlphaSource[i2]
+                    + rgbGreen * (not AlphaSource[i2])) div $FF;
+                  rgbBlue := ($7F + ImageSource[i2 * 3] * AlphaSource[i2] +
+                    rgbBlue * (not AlphaSource[i2])) div $FF;
+                  rgbReserved :=
+                    not(($7F + (not rgbReserved) * (not AlphaSource[i2])
+                    ) div $FF);
+                end;
+          end;
+
+          { Move pointers }
+          Inc(pByte(ImageData), BytesPerRowDest);
+          if Stretch then
+            j2 := Srect.Top + Trunc(j / FactorY)
+          else
+            j2 := Srect.Top + j;
+          pByte(ImageSource) := pByte(ImageSourceOrg) - BytesPerRowSrc * j2;
+          pByte(AlphaSource) := pByte(Header.ImageAlpha) +
+            BytesPerRowAlpha * j2;
+        end;
+      end;
+    { Palette images with 1 byte for each pixel }
+    1, 4, 8:
+      if Header.ColorType = COLOR_GRAYSCALEALPHA then
+      begin
+        j2 := Srect.Top;
+        pByte(ImageSource) := pByte(ImageSourceOrg) - BytesPerRowSrc * j2;
+        pByte(AlphaSource) := pByte(Header.ImageAlpha) +
+          BytesPerRowAlpha * j2;
+        FOR j := 1 TO H DO
+        begin
+          { Process all the pixels in this line }
+          FOR i := 0 TO W - 1 DO
+          begin
+            if Stretch then
+              i2 := Srect.Left + Trunc(i / FactorX)
+            else
+              i2 := Srect.Left + i;
+            { Obtains the palette index }
+            case Header.Bitdepth of
+              1:
+                begin
+                  CurBit := i2 mod 8;
+                  i2 := i2 div 8;
+                  PaletteIndex :=
+                    ((ImageSource[i2] shr (7 - (CurBit Mod 8))) and 1) * $FF;
+                end;
+              2, 4:
+                begin
+                  CurBit := i2 mod 4;
+                  i2 := i2 div 2;
+                  PaletteIndex :=
+                    ((ImageSource[i2] shr ((1 - (CurBit Mod 2)) * 4)) and
+                    $0F) * $11;
+                end;
+            else
+              PaletteIndex := ImageSource[i2];
+            end;
+            with ImageData[i], Header.BitmapInfo do
+            begin
+              rgbRed := ($7F + PaletteIndex * AlphaSource[i2] + rgbRed *
+                (not AlphaSource[i2])) div $FF;
+              rgbGreen := ($7F + PaletteIndex * AlphaSource[i2] + rgbGreen *
+                (not AlphaSource[i2])) div $FF;
+              rgbBlue := ($7F + PaletteIndex * AlphaSource[i2] + rgbBlue *
+                (not AlphaSource[i2])) div $FF;
+              rgbReserved :=
+                not(($7F + (not rgbReserved) * (not AlphaSource[i2]))
+                div $FF);
+            end;
+          end;
+
+          { Move pointers }
+          pByte(ImageData) := pByte(ImageData) + BytesPerRowDest;
+          if Stretch then
+            j2 := Srect.Top + Trunc(j / FactorY)
+          else
+            j2 := Srect.Top + j;
+          pByte(ImageSource) := pByte(ImageSourceOrg) - BytesPerRowSrc * j2;
+          pByte(AlphaSource) := pByte(Header.ImageAlpha) +
+            BytesPerRowAlpha * j2;
+        end
+      end
+      else { Palette images }
+      begin
+
+        { Obtain pointer to the transparency chunk }
+        TransparencyChunk := TChunktRNS(Chunks.ItemFromClass(TChunktRNS));
+        PaletteChunk := TChunkPLTE(Chunks.ItemFromClass(TChunkPLTE));
+
+        j2 := Srect.Top;
+        pByte(ImageSource) := pByte(ImageSourceOrg) - BytesPerRowSrc * j2;
+
+        FOR j := 1 TO H DO
+        begin
+          { Process all the pixels in this line }
+          for i := 0 to W - 1 do
+          begin
+            //CurBit := 0;
+            if Stretch then
+              i2 := Srect.Left + Trunc(i / FactorX)
+            else
+              i2 := Srect.Left + i;
+
+            { Obtains the palette index }
+            case Header.Bitdepth of
+              1:
+                begin
+                  CurBit := i2 mod 8;
+                  i2 := i2 div 8;
+                  PaletteIndex :=
+                    (ImageSource[i2] shr (7 - (CurBit Mod 8))) and 1;
+                end;
+              2, 4:
+                begin
+                  CurBit := i2 mod 4;
+                  i2 := i2 div 2;
+                  PaletteIndex :=
+                    (ImageSource[i2] shr ((1 - (CurBit Mod 2)) * 4)) and $0F;
+                end;
+            else
+              PaletteIndex := ImageSource[i2];
+            end;
+
+            { Updates the image with the new pixel }
+            with ImageData[i] do
+            begin
+              TransValue := TransparencyChunk.PaletteValues[PaletteIndex];
+              rgbRed := (255 + PaletteChunk.Item[PaletteIndex].rgbRed *
+                TransValue + rgbRed * (255 - TransValue)) shr 8;
+              rgbGreen := (255 + PaletteChunk.Item[PaletteIndex].rgbGreen *
+                TransValue + rgbGreen * (255 - TransValue)) shr 8;
+              rgbBlue := (255 + PaletteChunk.Item[PaletteIndex].rgbBlue *
+                TransValue + rgbBlue * (255 - TransValue)) shr 8;
+            end;
+
+          end;
+
+          { Move pointers }
+          pByte(ImageData) := pByte(ImageData) + BytesPerRowDest;
+          if Stretch then
+            j2 := Trunc(j / FactorY)
+          else
+            j2 := j;
+          pByte(ImageSource) := pByte(ImageSourceOrg) - BytesPerRowSrc * j2;
+        end
+      end { Palette images }
+  end { case Header.BitmapInfo.bmiHeader.biBitCount };
+
+  { Draws the new bitmap on the foreground }
+  BitBlt(DC, Rect.Left, Rect.Top, W, H, BufferDC, 0, 0, SRCCOPY);
+
+  { Free bitmap }
+  SelectObject(BufferDC, OldBitmap);
+  DeleteObject(BufferBitmap);
+  DeleteDC(BufferDC);
+end;
+
+procedure TDxPngImage.DrawToDC(DC: HDC; const Rect: TRect);
+var
+  Header: TChunkIHDR;
+begin
+  { Quit in case there is no header, otherwise obtain it }
+  if Empty then
+    Exit;
+  Header := Chunks.GetItem(0) as TChunkIHDR;
+
+  { Copy the data to the canvas }
+  case Self.TransparencyMode of
+{$IFDEF PartialTransparentDraw}
+    ptmPartial:
+      DrawPartialTrans(DC, Rect);
+{$ENDIF}
+    ptmBit:
+      DrawTransparentBitmap(DC, Header.ImageData, Header.BitmapInfo.bmiHeader,
+        pBitmapInfo(@Header.BitmapInfo), Rect,
+{$IFDEF UseDelphi}ColorToRGB({$ENDIF}TransparentColor)
+{$IFDEF UseDelphi}){$ENDIF}
+  else
+    begin
+      SetStretchBltMode(DC, COLORONCOLOR);
+      StretchDiBits(DC, Rect.Left, Rect.Top, Rect.Right - Rect.Left,
+        Rect.Bottom - Rect.Top, 0, 0, Header.Width, Header.Height,
+        Header.ImageData, pBitmapInfo(@Header.BitmapInfo)^,
+        DIB_RGB_COLORS, SRCCOPY)
+    end
+  end { case }
+end;
+
+procedure TDxPngImage.DrawToDest(ACanvas: TCanvas;
+  const SelfRect, DestRect: TRect);
+var
+  Header: TChunkIHDR;
+begin
+  if Empty then
+    Exit;
+  Header := Chunks.Item[0] as TChunkIHDR;
+  case Self.TransparencyMode of
+    ptmPartial:
+      DrawPngLayerialTransEx(ACanvas.Handle, SelfRect, DestRect);
+    ptmBit:
+      DrawTransparentBitmap(ACanvas.Handle, Header.ImageData,
+        Header.BitmapInfo.bmiHeader, pBitmapInfo(@Header.BitmapInfo),
+        DestRect, ColorToRGB(TransparentColor))
+  else
+    begin
+      SetStretchBltMode(ACanvas.Handle, COLORONCOLOR);
+      StretchDiBits(ACanvas.Handle, DestRect.Left, DestRect.Top,
+        DestRect.Right - DestRect.Left, DestRect.Bottom - DestRect.Top,
+        SelfRect.Left, SelfRect.Top, SelfRect.Right - SelfRect.Left,
+        SelfRect.Bottom - SelfRect.Top, Header.ImageData,
+        pBitmapInfo(@Header.BitmapInfo)^, DIB_RGB_COLORS, SRCCOPY)
+    end
+  end;
+end;
+
+procedure TDxPngImage.DrawToDest(DC: HDC; const SelfRect, DestRect: TRect);
+var
+  Header: TChunkIHDR;
+begin
+  if Empty then
+    Exit;
+  Header := Chunks.Item[0] as TChunkIHDR;
+  case Self.TransparencyMode of
+    ptmPartial:
+      DrawPngLayerialTransEx(DC, SelfRect, DestRect);
+    ptmBit:
+      DrawTransparentBitmap(DC, Header.ImageData, Header.BitmapInfo.bmiHeader,
+        pBitmapInfo(@Header.BitmapInfo), DestRect,
+        ColorToRGB(TransparentColor))
+  else
+    begin
+      SetStretchBltMode(DC, COLORONCOLOR);
+      StretchDiBits(DC, DestRect.Left, DestRect.Top,
+        DestRect.Right - DestRect.Left, DestRect.Bottom - DestRect.Top,
+        SelfRect.Left, SelfRect.Top, SelfRect.Right - SelfRect.Left,
+        SelfRect.Bottom - SelfRect.Top, Header.ImageData,
+        pBitmapInfo(@Header.BitmapInfo)^, DIB_RGB_COLORS, SRCCOPY)
+    end
+  end;
+end;
+
 initialization
   {Initialize}
   ChunkClasses := nil;
@@ -6044,13 +6148,13 @@ initialization
   {Registers TPngImage to use with TPicture}
   {$IFDEF UseDelphi}{$IFDEF RegisterGraphic}
     TPicture.RegisterFileFormat('PNG', 'Portable Network Graphics', TPngImage);
-    TPicture.RegisterFileFormat('PNG', 'Portable Network Graphics', TDxPngImage);
   {$ENDIF}{$ENDIF}
 finalization
   {$IFDEF UseDelphi}{$IFDEF RegisterGraphic}
     TPicture.UnregisterGraphicClass(TPngImage);
-    TPicture.UnregisterGraphicClass(TDxPngImage);
   {$ENDIF}{$ENDIF}
   {Free chunk classes}
   FreeChunkClassList;
 end.
+
+

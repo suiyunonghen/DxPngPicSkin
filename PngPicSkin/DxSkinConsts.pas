@@ -47,6 +47,13 @@ begin
              TransparentColor);
 end;
 
+{$IFDEF CPUX64}
+function divmod(x,y: Integer;var modvalue: Integer): Integer;
+begin
+  Result := x div y;
+  modvalue := x mod y;
+end;
+{$ELSE}
 function divmod(x,y: Integer;var modvalue: Integer): Integer;
 asm
   push ecx
@@ -56,6 +63,7 @@ asm
   pop ecx
   mov [ecx],edx
 end;
+{$ENDIF}
 
 function RectWidth(r: TRect): Integer;
 begin
