@@ -6148,10 +6148,12 @@ initialization
   {Registers TPngImage to use with TPicture}
   {$IFDEF UseDelphi}{$IFDEF RegisterGraphic}
     TPicture.RegisterFileFormat('PNG', 'Portable Network Graphics', TPngImage);
+    TPicture.RegisterFileFormat('PNG', 'Portable Network Graphics', TDxPngImage);
   {$ENDIF}{$ENDIF}
 finalization
   {$IFDEF UseDelphi}{$IFDEF RegisterGraphic}
     TPicture.UnregisterGraphicClass(TPngImage);
+    TPicture.UnregisterGraphicClass(TDxPngImage);
   {$ENDIF}{$ENDIF}
   {Free chunk classes}
   FreeChunkClassList;
