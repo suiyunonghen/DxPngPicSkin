@@ -688,6 +688,7 @@ var
   i,SaveIndex: integer;
   C: TControl;
   r: TRect;
+  HB: HBRUSH;
   p: TPoint;
 begin
   if csDesigning in ComponentState then
@@ -728,6 +729,9 @@ begin
       if not FBackPng.Empty then
       begin
         Dc := TWMEraseBkgnd(msg).DC;
+        HB := CreateSolidBrush(ColorToRGB(FForm.Color));
+        FillRect(Dc,Rect(0,0,FForm.Width,FForm.Height),HB);
+        DeleteObject(HB);
         if FBackTopCenter then
         begin
           r.Top := 0;
@@ -737,18 +741,6 @@ begin
           FBackPng.DrawToDC(Dc,r);
         end
         else FBackPng.DrawToDC(Dc,Rect(0,0,FBackPng.Width,FBackPng.Height));
-        {for i := 0 to FForm.ControlCount - 1 do
-        begin
-          C := FForm.Controls[i];
-          SaveIndex := SaveDC(DC);
-          try
-            MoveWindowOrg(DC, C.Left, C.Top);
-            IntersectClipRect(DC, 0, 0, C.Width, C.Height);
-            C.Perform(WM_PAINT,DC,0);
-          finally
-            RestoreDC(DC, SaveIndex);
-          end;
-        end;}
       end
       else if Assigned(OldWndProc) then
         OldWndProc(msg);
