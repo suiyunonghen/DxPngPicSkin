@@ -5,7 +5,7 @@ interface
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
   Dialogs, DxPngFormUI, Registry, IniFiles, ShellAPI, ShlObj, StrUtils, TlHelp32,
-  IOUtils;
+  IOUtils, Vcl.ExtCtrls;
 
 type
   TForm2 = class(TForm)
@@ -16,12 +16,17 @@ type
     DxPngUIButton3: TDxPngUIButton;
     DxPngUIButton4: TDxPngUIButton;
     DxPngUIButton6: TDxPngUIButton;
+    DxButtonSkin1: TDxButtonSkin;
+    DxUISkins1: TDxUISkins;
+    DxPngProgress1: TDxPngProgress;
+    Timer1: TTimer;
     procedure DxPngUIButton2Click(Sender: TObject);
     procedure DxPngUIButton5Click(Sender: TObject);
     procedure DxPngUIButton1Click(Sender: TObject);
     procedure DxPngUIButton3Click(Sender: TObject);
     procedure DxPngUIButton6Click(Sender: TObject);
     procedure DxPngUIButton4Click(Sender: TObject);
+    procedure Timer1Timer(Sender: TObject);
   private
     { Private declarations }
   public
@@ -84,5 +89,12 @@ begin
   close;
 end;
 
+
+procedure TForm2.Timer1Timer(Sender: TObject);
+begin
+  DxPngProgress1.Position := DxPngProgress1.Position + 1;
+  if DxPngProgress1.Position = 100 then
+    DxPngProgress1.Position := 0;
+end;
 
 end.

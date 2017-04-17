@@ -2,9 +2,9 @@ object Form2: TForm2
   Left = 0
   Top = 0
   Caption = 'Form2'
-  ClientHeight = 482
-  ClientWidth = 610
-  Color = clBtnFace
+  ClientHeight = 603
+  ClientWidth = 667
+  Color = clWhite
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -11
@@ -5606,6 +5606,14 @@ object Form2: TForm2
       92B10521526A6AA9015E39AE7E73414BB360A43820EF6BEB7F353593351DCCE0
       7E48466C1DD1D8FC5BF94F8811FE53CFFA3FB9E59A2CEFF09C98000000004945
       4E44AE426082}
+  end
+  object DxPngProgress1: TDxPngProgress
+    Left = 85
+    Top = 520
+    Width = 473
+    Height = 34
+    PngUIEngine = DxFormPngUIEngine1
+    ShowPositionCaption = False
   end
   object DxFormPngUIEngine1: TDxFormPngUIEngine
     CanMoveForm = True
@@ -24824,7 +24832,23 @@ object Form2: TForm2
       482185145248218514F2672605C02BA490420A29A490420AF93393FF0F144965
       B159534EEB0000000049454E44AE426082}
     UseGDIExStyle = False
+    WindowState = pwsNormal
     Left = 176
     Top = 64
+  end
+  object DxButtonSkin1: TDxButtonSkin
+    UISkins = DxUISkins1
+    Left = 480
+    Top = 264
+  end
+  object DxUISkins1: TDxUISkins
+    Left = 496
+    Top = 152
+  end
+  object Timer1: TTimer
+    Interval = 100
+    OnTimer = Timer1Timer
+    Left = 328
+    Top = 304
   end
 end

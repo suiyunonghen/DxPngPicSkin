@@ -36,6 +36,7 @@ type
   TDxPngUIControl = class;
   TDxUISkins = class;
   TDxUISkin = class;
+  TWindowState = (pwsNormal, pwsMin, pwsMax);
   TDxFormPngUIEngine = class(TComponent)
   private
     FForm: TForm;
@@ -51,6 +52,7 @@ type
     LockMsgToTargControl: Boolean;
     FAlphaByte: Byte;
     FUISkins: TDxUISkins;
+    FWindowState: TWindowState;
     procedure SetBackPng(Value: TDxPngImage);
     procedure SetBackTopCenter(const Value: Boolean);
     procedure SetUserGDIExStyle(const Value: Boolean);
@@ -81,6 +83,7 @@ type
     property AlphaByte: Byte read FAlphaByte write SetAlphaByte default 240;
 
     property UISkins: TDxUISkins read FUISkins write SetUISkins;
+    property WindowState: TWindowState read FWindowState write FWindowState;
   end;
 
   TDxPngUIControl = class(TControl)
@@ -514,7 +517,10 @@ var
   TRNS: TChunkTRNS;
   pb: pByteArray;
 begin
-  if (FUpCount > 0) or (csDesigning in ComponentState) or (csDestroying in ComponentState) then Exit;
+  if (FUpCount > 0) or (csDesigning in ComponentState) or (csDestroying in ComponentState) or (FWindowState = pwsMin)
+  then
+    Exit;
+
   if not FUseGDIExStyle then
   begin
     bmp := TBitmap.Create;
@@ -751,102 +757,122 @@ begin
   else
   begin
     if not LockMsgToTargControl then
-    case msg.Msg of
-    WM_LBUTTONDOWN: FForm.SetFocus;
-    CM_WANTSPECIALKEY:
-      begin
-        if FActiveControl <> nil then
-        begin
-          FActiveControl.Dispatch(Msg);
-          if Msg.Result = 1 then
-            Exit;
-        end;
-      end;
-    CM_DIALOGCHAR,CM_DIALOGKEY,WM_KEYDOWN,WM_CHAR,WM_KEYUP:
-      begin
-        if FForm.Focused and (FActiveControl <> nil) then
-        begin
-          FActiveControl.HandKeyMsg(Msg);
-          Exit;
-        end;
-      end;
-    WM_SETFOCUS:
-      begin
-        if FActiveControl <> nil then
-          FActiveControl.Dispatch(Msg);
-      end;
-    WM_KILLFOCUS:
-      begin
-        if FActiveControl <> nil then
-          FActiveControl.Dispatch(Msg);
-      end;
-    WM_MOUSEWHEEL:
-      begin
-        p := FForm.ScreenToClient(SmallPointToPoint(TWMMouseWheel(Msg).Pos));
-        C := FindControlAtPoint(p);
-        if C <> nil then
-        begin
-          TWMMouseWheel(Msg).XPos := p.X;
-          TWMMouseWheel(Msg).YPos := p.Y;
-          C.Dispatch(Msg);
-          Exit;
-        end;
-      end;
-    WM_SHOWWINDOW:
-      begin
-        //先把绑定到窗体的Show出来
-        for i := 0 to LinkPngControls.Count - 1 do
-        begin
-          C:= LinkPngControls[i];
-          if c.InheritsFrom(TDxCustomPngFormControl) and (TDxCustomPngFormControl(C).FLinkForm <> nil) then
+      case msg.msg of
+        WM_SYSCOMMAND:
           begin
-            TDxCustomPngFormControl(C).FLinkForm.BorderStyle := bsNone;
-            SetWindowLong(TDxCustomPngFormControl(C).FLinkForm.Handle,GWL_HWNDPARENT,FForm.Handle);
-            //指定位置
-            TDxCustomPngFormControl(C).FLinkForm.Left := FForm.Left + c.Left;
-            TDxCustomPngFormControl(C).FLinkForm.Top := FForm.Top + C.Top;
-            TDxCustomPngFormControl(C).FLinkForm.Width := c.Width;
-            TDxCustomPngFormControl(C).FLinkForm.Height := C.Height;
-            TDxCustomPngFormControl(C).FLinkForm.Show;
-            TDxCustomPngFormControl(C).HasShowWindow := True;
+            case msg.WParam of
+              SC_RESTORE:
+                begin
+                  FWindowState := pwsNormal;
+                  UpdateLayered;
+                end;
+
+              SC_MINIMIZE:
+                FWindowState := pwsMin;
+
+              SC_MAXIMIZE:
+                begin
+                  FWindowState := pwsMax;
+                  UpdateLayered;
+                end;
+            end;
           end;
-        end;
-        if not FBackPng.Empty then
-        begin
-          FUpCount := 0;
-          UpdateLayered;
-        end;
-      end;
-    WM_MOVE,WM_DWMCOMPOSITIONCHANGED: //移动窗体，子窗体也移动
-      begin
-        for i := 0 to LinkPngControls.Count - 1 do
-        begin
-          C:= LinkPngControls[i];
-          if c.InheritsFrom(TDxCustomPngFormControl) and (TDxCustomPngFormControl(C).FLinkForm <> nil) and
-            TDxCustomPngFormControl(C).HasShowWindow then
+        WM_LBUTTONDOWN:
+          FForm.SetFocus;
+        CM_WANTSPECIALKEY:
           begin
-            TDxCustomPngFormControl(C).FLinkForm.BorderStyle := bsNone;
-            //指定位置
-            TDxCustomPngFormControl(C).FLinkForm.Left := FForm.Left + c.Left;
-            TDxCustomPngFormControl(C).FLinkForm.Top := FForm.Top + C.Top;
-            TDxCustomPngFormControl(C).FLinkForm.Width := c.Width;
-            TDxCustomPngFormControl(C).FLinkForm.Height := C.Height;
-            TDxCustomPngFormControl(C).FLinkForm.Show;
+            if FActiveControl <> nil then
+            begin
+              FActiveControl.Dispatch(msg);
+              if msg.Result = 1 then
+                Exit;
+            end;
           end;
-        end;
+        CM_DIALOGCHAR, CM_DIALOGKEY, WM_KEYDOWN, WM_CHAR, WM_KEYUP:
+          begin
+            if FForm.Focused and (FActiveControl <> nil) then
+            begin
+              FActiveControl.HandKeyMsg(msg);
+              Exit;
+            end;
+          end;
+        WM_SETFOCUS:
+          begin
+            if FActiveControl <> nil then
+              FActiveControl.Dispatch(msg);
+          end;
+        WM_KILLFOCUS:
+          begin
+            if FActiveControl <> nil then
+              FActiveControl.Dispatch(msg);
+          end;
+        WM_MOUSEWHEEL:
+          begin
+            p := FForm.ScreenToClient(SmallPointToPoint(TWMMouseWheel(msg).Pos));
+            C := FindControlAtPoint(p);
+            if C <> nil then
+            begin
+              TWMMouseWheel(msg).XPos := p.X;
+              TWMMouseWheel(msg).YPos := p.Y;
+              C.Dispatch(msg);
+              Exit;
+            end;
+          end;
+        WM_SHOWWINDOW:
+          begin
+            // 先把绑定到窗体的Show出来
+            for i := 0 to LinkPngControls.Count - 1 do
+            begin
+              C := LinkPngControls[i];
+              if C.InheritsFrom(TDxCustomPngFormControl) and (TDxCustomPngFormControl(C).FLinkForm <> nil) then
+              begin
+                TDxCustomPngFormControl(C).FLinkForm.BorderStyle := bsNone;
+                SetWindowLong(TDxCustomPngFormControl(C).FLinkForm.Handle, GWL_HWNDPARENT, FForm.Handle);
+                // 指定位置
+                TDxCustomPngFormControl(C).FLinkForm.Left := FForm.Left + C.Left;
+                TDxCustomPngFormControl(C).FLinkForm.Top := FForm.Top + C.Top;
+                TDxCustomPngFormControl(C).FLinkForm.Width := C.Width;
+                TDxCustomPngFormControl(C).FLinkForm.Height := C.Height;
+                TDxCustomPngFormControl(C).FLinkForm.Show;
+                TDxCustomPngFormControl(C).HasShowWindow := True;
+              end;
+            end;
+            if not FBackPng.Empty then
+            begin
+              FUpCount := 0;
+              UpdateLayered;
+            end;
+          end;
+        WM_MOVE, WM_DWMCOMPOSITIONCHANGED: // 移动窗体，子窗体也移动
+          begin
+            for i := 0 to LinkPngControls.Count - 1 do
+            begin
+              C := LinkPngControls[i];
+              if C.InheritsFrom(TDxCustomPngFormControl) and (TDxCustomPngFormControl(C).FLinkForm <> nil) and
+                TDxCustomPngFormControl(C).HasShowWindow then
+              begin
+                TDxCustomPngFormControl(C).FLinkForm.BorderStyle := bsNone;
+                // 指定位置
+                TDxCustomPngFormControl(C).FLinkForm.Left := FForm.Left + C.Left;
+                TDxCustomPngFormControl(C).FLinkForm.Top := FForm.Top + C.Top;
+                TDxCustomPngFormControl(C).FLinkForm.Width := C.Width;
+                TDxCustomPngFormControl(C).FLinkForm.Height := C.Height;
+                TDxCustomPngFormControl(C).FLinkForm.Show;
+              end;
+            end;
+          end;
+        CM_VISIBLECHANGED:
+          begin
+            for i := 0 to LinkPngControls.Count - 1 do
+            begin
+              C := LinkPngControls[i];
+              if C.InheritsFrom(TDxCustomPngFormControl) and (TDxCustomPngFormControl(C).FLinkForm <> nil) and
+                TDxCustomPngFormControl(C).HasShowWindow then
+                TDxCustomPngFormControl(C).FLinkForm.Hide;
+            end;
+          end;
       end;
-    CM_VISIBLECHANGED:
-      begin
-        for i := 0 to LinkPngControls.Count - 1 do
-        begin
-          C:= LinkPngControls[i];
-          if c.InheritsFrom(TDxCustomPngFormControl) and (TDxCustomPngFormControl(C).FLinkForm <> nil) and
-           TDxCustomPngFormControl(C).HasShowWindow then
-            TDxCustomPngFormControl(C).FLinkForm.Hide;
-        end;
-      end;
-    end;
-    if (msg.Msg <> WM_SHOWWINDOW) and  Assigned(OldWndProc) then
+    if (msg.msg <> WM_SHOWWINDOW) and Assigned(OldWndProc) then
       OldWndProc(msg);
   end;
 end;
@@ -867,7 +893,9 @@ procedure TDxPngUIControl.CMMouseEnter(var msg: TMessage);
 begin
   inherited;
   if (FPngUIEngine <> nil) and not  (csDesigning in ComponentState) then
+  begin
     FPngUIEngine.UpdateLayered;
+  end;
 end;
 
 procedure TDxPngUIControl.CMMouseLeave(var msg: TMessage);
@@ -1574,28 +1602,29 @@ begin
       r2.Top := (Height - ProgBack.Height) div 2;
       r2.Bottom := r2.Top + ProgBack.Height;
     end;
-    ProgBack.DrawToDest(ToCanvas,r,r2);
+    ProgBack.DrawToDest(ToCanvas, r, r2);
     r.Left := r.Right;
     r.Right := r.Left + 4;
     r2.Left := r2.Right;
     r2.Right := Width - 20;
-    ProgBack.DrawToDest(ToCanvas,r,r2);
+    ProgBack.DrawToDest(ToCanvas, r, r2);
     r.Left := ProgBack.Width - 20;
     r.Right := ProgBack.Width;
     r2.Left := r2.Right;
     r2.Right := Width;
-    ProgBack.DrawToDest(ToCanvas,r,r2);
+    ProgBack.DrawToDest(ToCanvas, r, r2);
   end
   else
   begin
-    //绘制滚动条
-    //先绘制背景
+    // 绘制滚动条
+    // 先绘制背景
     r.Left := 0;
     r.Right := 20;
     r.Top := 0;
     r.Bottom := ProgBack.Height;
 
-    r2.Left := DestRect.Left;r2.Right := 20 + DestRect.Left;
+    r2.Left := DestRect.Left;
+    r2.Right := 20 + DestRect.Left;
     if Height < ProgBack.Height then
     begin
       r2.Top := DestRect.Top;
@@ -1606,63 +1635,63 @@ begin
       r2.Top := DestRect.Top + (Height - ProgBack.Height) div 2;
       r2.Bottom := r2.Top + ProgBack.Height;
     end;
-    ProgBack.DrawToDest(ToCanvas,r,r2);
+    ProgBack.DrawToDest(ToCanvas, r, r2);
     r.Left := r.Right;
     r.Right := r.Left + 4;
     r2.Left := r2.Right;
     r2.Right := DestRect.Left + Width - 20;
-    ProgBack.DrawToDest(ToCanvas,r,r2);
+    ProgBack.DrawToDest(ToCanvas, r, r2);
     r.Left := ProgBack.Width - 20;
     r.Right := ProgBack.Width;
     r2.Left := r2.Right;
-    r2.Right := DestRect.Left +Width;
-    ProgBack.DrawToDest(ToCanvas,r,r2);
+    r2.Right := DestRect.Left + Width;
+    ProgBack.DrawToDest(ToCanvas, r, r2);
 
-    //绘制区域
+    // 绘制区域
     r.Top := 0;
     r.Bottom := ProgPos.Height;
     r2.Top := DestRect.Top;
-    r2.Bottom := Height + R2.Top;
-    if (step < 9) or (FPosition = 0) then
+    r2.Bottom := Height + r2.Top;
+    if (Step < 9) or (FPosition = 0) then
     begin
 
     end
-    else if Step <= ProgPos.Width then
+    else if Step < ProgPos.Width - 9 then
     begin
       r.Left := ProgPos.Width - Step;
       r.Right := ProgPos.Width;
       r2.Left := DestRect.Left + 9;
       r2.Right := r2.Left + Step;
-      ProgPos.DrawToDest(ToCanvas,r,r2);
+      ProgPos.DrawToDest(ToCanvas, r, r2);
     end
-    else if Step < width then
+    else if Step <= Width then
     begin
-      //先绘制前面的进度
+      // 先绘制前面的进度
       r.Left := 0;
       r.Right := ProgForward.Width;
       r.Bottom := ProgForward.Height;
-      r2.Left := 9;
-      r2.Right := Step - ProgPos.Width + 25;
+      r2.Left := self.Left + 9;
+      r2.Right := self.Left + Step - ProgPos.Width + 30;
       r2.Top := DestRect.Top + (Height - ProgForward.Height) div 2;
       r2.Bottom := r2.Top + ProgForward.Height;
-      ProgForward.DrawToDest(ToCanvas,r,r2);
+      ProgForward.DrawToDest(ToCanvas, r, r2);
 
       r.Bottom := ProgPos.Height;
       r.Left := 0;
       r.Right := ProgPos.Width;
-      r2.Left := Step - ProgPos.Width + 9;
-      r2.Right := Step + 9;
+      r2.Left := self.Left + Step - ProgPos.Width + 9;
+      r2.Right := self.Left + Step + 9;
       r2.Top := DestRect.Top;
-      r2.Bottom := Height + R2.Top;
-      ProgPos.DrawToDest(ToCanvas,r,r2);
+      r2.Bottom := Height + r2.Top;
+      ProgPos.DrawToDest(ToCanvas, r, r2);
     end;
-    //绘制文字
+    // 绘制文字
     if FShowPositionCaption then
     begin
       r := DestRect;
-      st := FormatFloat('#.##',(100 * FPosition) / Max) + '%';
+      st := FormatFloat('#.##', (100 * FPosition) / Max) + '%';
       ToCanvas.Brush.Style := bsClear;
-      DrawText(ToCanvas.Handle,PChar(st),-1,r,DT_VCENTER or DT_CENTER or DT_SINGLELINE);
+      DrawText(ToCanvas.Handle, PChar(st), -1, r, DT_VCENTER or DT_CENTER or DT_SINGLELINE);
     end;
   end;
 end;
@@ -1889,6 +1918,7 @@ begin
   if FUISkins <> nil then
     FUISkins.Change;
 end;
+
 
 procedure TDxUISkin.SetUISkins(const Value: TDxUISkins);
 var

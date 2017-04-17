@@ -664,8 +664,7 @@ begin
     AVirtualCursor := XPos;
     for Index := 0 to High(AChars) do
     begin
-      if (X > AVirtualCursor) and (X <= AVirtualCursor + AChars[Index].Width)
-        then
+      if (X > AVirtualCursor) and (X <= AVirtualCursor + AChars[Index].Width) then
       begin
         if Index < Length(Text) then
         begin
